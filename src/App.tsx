@@ -11,6 +11,7 @@ import { Inventario } from './pages/Inventario';
 import { Caja } from './pages/Caja';
 import { Reportes } from './pages/Reportes';
 import { Usuarios } from './pages/Usuarios';
+import { Sistema } from './pages/Sistema';
 import { Layout } from './components/layout/Layout';
 
 function ProtectedRoute({ children, requiredPermission }: { children: React.ReactNode, requiredPermission?: keyof UserPermissions }) {
@@ -64,6 +65,11 @@ function App() {
           <Route path="usuarios" element={
             <ProtectedRoute requiredPermission="can_manage_users">
               <Usuarios />
+            </ProtectedRoute>
+          } />
+          <Route path="sistema" element={
+            <ProtectedRoute requiredPermission="can_manage_system">
+              <Sistema />
             </ProtectedRoute>
           } />
         </Route>

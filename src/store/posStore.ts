@@ -8,6 +8,8 @@ export interface Product {
   sale_price: number;
   cost_price?: number;
   stock: number;
+  category_id?: string;
+  categories?: { name: string };
 }
 
 export interface CartItem extends Product {
@@ -31,24 +33,27 @@ export const usePosStore = create<PosState>((set, get) => ({
   cart: [],
   discount: 0,
 
-  addToCart: (product, qty = 1) => {
-    const { cart } = get();
-    const existing = cart.find(item => item.id === product.id);
-
+  addToCart: (product) => set((state) => {
+    const existing = state.cart.find(item => item.id === product.id);
     if (existing) {
-      set({
-        cart: cart.map(item =>
+      if (existing.quantity >= product.stock) {
+        alert('Stock insuficiente para agregar más unidades.');
+        return state;
+      }
+      return {
+        cart: state.cart.map(item =>
           item.id === product.id
-            ? { ...item, quantity: item.quantity + qty, subtotal: (item.quantity + qty) * item.sale_price }
+            ? { ...item, quantity: item.quantity + 1, subtotal: (item.quantity + 1) * item.sale_price }
             : item
         )
-      });
-    } else {
-      set({
-        cart: [...cart, { ...product, quantity: qty, subtotal: qty * product.sale_price }]
-      });
+      };
     }
-  },
+    if (product.stock <= 0) {
+      alert('Producto sin stock disponible.');
+      return state;
+    }
+    return { cart: [...state.cart, { ...product, quantity: 1, subtotal: product.sale_price }] };
+  }),
 
   removeFromCart: (productId) => {
     set((state) => ({
@@ -56,19 +61,17 @@ export const usePosStore = create<PosState>((set, get) => ({
     }));
   },
 
-  updateQuantity: (productId, qty) => {
-    if (qty <= 0) {
-      get().removeFromCart(productId);
-      return;
-    }
-    set((state) => ({
-      cart: state.cart.map(item =>
-        item.id === productId
-          ? { ...item, quantity: qty, subtotal: qty * item.sale_price }
-          : item
-      )
-    }));
-  },
+  updateQuantity: (productId, quantity) => set((state) => ({
+    cart: state.cart.map(item => {
+      if (item.id === productId) {
+        // Prevent exceeding stock
+        const validQuantity = Math.min(Math.max(1, quantity), item.stock);
+        if (quantity > item.stock) alert('No puedes vender más del stock disponible.');
+        return { ...item, quantity: validQuantity, subtotal: validQuantity * item.sale_price };
+      }
+      return item;
+    })
+  })),
 
   setDiscount: (amount) => set({ discount: amount }),
 

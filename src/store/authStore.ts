@@ -7,6 +7,7 @@ export interface UserPermissions {
   can_manage_cash: boolean;
   can_view_reports: boolean;
   can_manage_users: boolean;
+  can_manage_system: boolean;
 }
 
 export interface User {
@@ -53,7 +54,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         full_name: data.full_name,
         role: data.role,
         permissions: data.permissions || {
-          can_sell: false, can_inventory: false, can_manage_cash: false, can_view_reports: false, can_manage_users: false
+          can_sell: false, can_inventory: false, can_manage_cash: false, can_view_reports: false, can_manage_users: false, can_manage_system: false
         }
       };
 

@@ -22,35 +22,45 @@ export function Ventas() {
   const [amountPaid, setAmountPaid] = useState<number | ''>('');
   const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia'>('efectivo');
 
-  // Simulate real-time search
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+
+  // Fetch all products on mount
   useEffect(() => {
-    const search = async () => {
-      if (!searchTerm) {
-        setSearchResults([]);
-        return;
-      }
-      
+    const fetchProducts = async () => {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .or(`name.ilike.%${searchTerm}%,barcode.eq.${searchTerm},sku.ilike.%${searchTerm}%`)
         .eq('active', true)
-        .limit(10);
-        
+        .order('name');
       if (!error && data) {
-        // Automatically add if it's an exact barcode match
-        if (data.length === 1 && data[0].barcode === searchTerm) {
-          addToCart(data[0]);
-          setSearchTerm('');
-        } else {
-          setSearchResults(data);
-        }
+        setAllProducts(data);
       }
     };
+    fetchProducts();
+  }, []);
 
-    const debounceTimer = setTimeout(search, 300);
-    return () => clearTimeout(debounceTimer);
-  }, [searchTerm, addToCart]);
+  // Instant local search
+  useEffect(() => {
+    if (!searchTerm) {
+      setSearchResults([]);
+      return;
+    }
+    const lowerTerm = searchTerm.toLowerCase();
+    const filtered = allProducts.filter(p => 
+      p.name.toLowerCase().includes(lowerTerm) || 
+      (p.barcode && p.barcode.includes(lowerTerm)) || 
+      (p.sku && p.sku.toLowerCase().includes(lowerTerm))
+    );
+    
+    // Auto-add exact barcode match
+    if (filtered.length === 1 && filtered[0].barcode === searchTerm) {
+      addToCart(filtered[0]);
+      setSearchTerm('');
+      setSearchResults([]);
+    } else {
+      setSearchResults(filtered.slice(0, 15)); // Limit visual results to 15
+    }
+  }, [searchTerm, allProducts, addToCart]);
 
   const handleProcessPayment = async () => {
     // 1. Get active cash register
@@ -181,8 +191,11 @@ export function Ventas() {
                 {cart.map(item => (
                   <div key={item.id} className="cart-item">
                     <div className="item-info">
-                      <div className="item-name">{item.name}</div>
-                      <div className="item-price text-muted text-sm">{formatCLP(item.sale_price)} c/u</div>
+                      <div className="item-name font-semibold">{item.name}</div>
+                      <div className="flex gap-4 text-xs mt-1">
+                        <span className="text-muted">Precio: {formatCLP(item.sale_price)}</span>
+                        <span className="text-info font-medium">Stock: {item.stock - item.quantity} rest.</span>
+                      </div>
                     </div>
                     <div className="item-actions">
                       <div className="quantity-controls">

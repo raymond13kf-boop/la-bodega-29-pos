@@ -4,7 +4,7 @@ import { useAuthStore } from '../../store/authStore';
 import { clsx } from 'clsx';
 import { 
   Store, LayoutDashboard, ShoppingCart, 
-  Package, Inbox, FileText, Users, X 
+  Package, Inbox, FileText, Users, X, ShieldAlert 
 } from 'lucide-react';
 import './Layout.css';
 
@@ -24,6 +24,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     { path: '/inventario', icon: <Package size={20} />, label: 'Inventario', show: perms?.can_inventory },
     { path: '/reportes', icon: <FileText size={20} />, label: 'Reportes', show: perms?.can_view_reports },
     { path: '/usuarios', icon: <Users size={20} />, label: 'Usuarios', show: perms?.can_manage_users },
+    { path: '/sistema', icon: <ShieldAlert size={20} />, label: 'Sistema', show: perms?.can_manage_system },
   ];
 
   return (

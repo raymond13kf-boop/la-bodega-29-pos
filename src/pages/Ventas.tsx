@@ -42,7 +42,7 @@ export function Ventas() {
   // Instant local search
   useEffect(() => {
     if (!searchTerm) {
-      setSearchResults([]);
+      setSearchResults(allProducts);
       return;
     }
     const lowerTerm = searchTerm.toLowerCase();
@@ -160,9 +160,9 @@ export function Ventas() {
                 No se encontraron productos
               </div>
             )}
-            {searchResults.length === 0 && !searchTerm && (
+            {allProducts.length === 0 && (
               <div className="text-center text-muted col-span-full py-8">
-                Escribe o escanea un código para buscar
+                Aún no hay productos en el inventario.
               </div>
             )}
           </CardContent>

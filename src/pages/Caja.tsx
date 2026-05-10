@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { CurrencyInput } from '../components/ui/CurrencyInput';
-import { Lock, Unlock, DollarSign, Clock } from 'lucide-react';
+import { Lock, Unlock, Clock } from 'lucide-react';
 
 const formatCLP = (amount: number) => {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);

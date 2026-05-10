@@ -17,7 +17,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
 
     useEffect(() => {
       if (value === 0 && displayValue === '') return;
-      if (value === 0 && document.activeElement !== document.getElementById(props.id)) {
+      if (value === 0 && (!props.id || document.activeElement !== document.getElementById(props.id))) {
         setDisplayValue('');
         return;
       }
@@ -41,7 +41,7 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
       }
     };
 
-    const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    const handleFocus = () => {
       if (value === 0) setDisplayValue('');
     };
 

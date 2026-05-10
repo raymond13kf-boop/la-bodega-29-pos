@@ -1,0 +1,33 @@
+.loading-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  font-size: var(--text-lg);
+  color: var(--color-primary);
+  background-color: var(--color-background);
+  font-weight: 500;
+}
+
+/* Layout Utilities */
+.app-layout {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background-color: var(--color-background);
+}
+
+.main-content {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.page-container {
+  flex-grow: 1;
+  padding: var(--space-6);
+  overflow-y: auto;
+}

@@ -109,6 +109,16 @@ export function Ventas() {
 
     await supabase.from('sale_items').insert(itemsToInsert);
 
+    // 4. Create Inventory Movements
+    const movementsToInsert = cart.map(item => ({
+      product_id: item.id,
+      user_id: userId,
+      type: 'salida',
+      quantity: item.quantity,
+      reason: `Venta #${saleData.id.slice(0, 8)}`
+    }));
+    await supabase.from('inventory_movements').insert(movementsToInsert);
+
     // Update stock in parallel
     await Promise.all(cart.map(item => 
       supabase.rpc('decrement_stock', { p_id: item.id, qty: item.quantity })

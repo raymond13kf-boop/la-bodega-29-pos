@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import { Card, CardContent } from '../components/ui/Card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
 import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
-import { Download, FileText, Ban, TrendingUp, AlertTriangle, PackageX, DollarSign, Calendar, BarChart3, Clock } from 'lucide-react';
+import { Download, Ban, TrendingUp, AlertTriangle, PackageX, DollarSign, BarChart3, Clock } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 const formatCLP = (amount: number) => {

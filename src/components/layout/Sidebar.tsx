@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { clsx } from 'clsx';
 import { 
-  Store, LayoutDashboard, ShoppingCart, 
+  LayoutDashboard, ShoppingCart, 
   Package, Inbox, FileText, Users, X, ShieldAlert 
 } from 'lucide-react';
 import './Layout.css';

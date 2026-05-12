@@ -25,11 +25,36 @@ function ProtectedRoute({ children, requiredPermission }: { children: React.Reac
 }
 
 function App() {
-  const { checkSession } = useAuthStore();
+  const { checkSession, logout, user } = useAuthStore();
 
   useEffect(() => {
     checkSession();
   }, [checkSession]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let timeoutId: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      // 1 hora de inactividad = 3600000 ms
+      timeoutId = setTimeout(() => {
+        logout();
+        alert('Tu sesión se ha cerrado automáticamente por inactividad (1 hora).');
+      }, 3600000);
+    };
+
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    events.forEach(event => document.addEventListener(event, resetTimer, { passive: true }));
+
+    resetTimer();
+
+    return () => {
+      clearTimeout(timeoutId);
+      events.forEach(event => document.removeEventListener(event, resetTimer));
+    };
+  }, [user, logout]);
 
   return (
     <BrowserRouter>

@@ -175,10 +175,10 @@ export function Reportes() {
   const renderTabButton = (id: any, label: string, icon: any) => (
     <button 
       onClick={() => setActiveTab(id)}
-      className={`flex items-center gap-2 px-4 py-2 rounded-t-lg font-medium transition-colors ${
+      className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 ${
         activeTab === id 
-        ? 'bg-white text-primary border-t border-x border-gray-200' 
-        : 'text-gray-500 hover:text-gray-700 bg-gray-50'
+        ? 'bg-primary text-white shadow-md transform scale-105 border border-transparent' 
+        : 'bg-white text-gray-600 hover:bg-gray-100 hover:text-gray-900 border border-gray-200 shadow-sm'
       }`}
     >
       {icon} {label}
@@ -199,7 +199,7 @@ export function Reportes() {
         </div>
       </div>
 
-      <div className="flex border-b border-gray-200">
+      <div className="flex flex-wrap gap-3 pb-2">
         {renderTabButton('resumen', 'Resumen General', <BarChart3 size={18} />)}
         {renderTabButton('ventas', 'Historial de Ventas', <Clock size={18} />)}
         {renderTabButton('anulaciones', 'Bitácora Anulaciones', <Ban size={18} />)}

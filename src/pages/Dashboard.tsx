@@ -42,7 +42,7 @@ export function Dashboard() {
       // 1. Ventas y Tickets de Hoy
       const { data: salesData } = await supabase
         .from('sales')
-        .select('id, total, created_at')
+        .select('id, total, created_at, status, users(full_name)')
         .gte('created_at', todayISO);
 
       let totalVentas = 0;
@@ -50,17 +50,20 @@ export function Dashboard() {
       const salesMovements: Movement[] = [];
 
       if (salesData) {
-        totalVentas = salesData.reduce((acc, sale) => acc + Number(sale.total), 0);
-        totalTickets = salesData.length;
+        const completedSales = salesData.filter(s => s.status !== 'anulada');
+        totalVentas = completedSales.reduce((acc, sale) => acc + Number(sale.total), 0);
+        totalTickets = completedSales.length;
         
         salesData.forEach(sale => {
+          const isVoided = sale.status === 'anulada';
+          const sellerName = (sale.users as any)?.full_name || 'E-commerce';
           salesMovements.push({
             id: sale.id,
-            type: 'venta',
-            title: 'Nueva Venta',
+            type: isVoided ? 'ajuste' : 'venta',
+            title: isVoided ? 'Venta Anulada' : 'Nueva Venta',
             amount: Number(sale.total),
             date: new Date(sale.created_at),
-            details: `Ticket #${sale.id.slice(0, 8)}`
+            details: `Ticket #${sale.id.slice(0, 8)} • ${isVoided ? 'Anulada por: ' : 'Vendió: '}${sellerName}`
           });
         });
       }
@@ -110,7 +113,7 @@ export function Dashboard() {
       // 4. Movimientos de Bodega Recientes
       const { data: inventoryData } = await supabase
         .from('inventory_movements')
-        .select('id, type, quantity, reason, created_at, products(name)')
+        .select('id, type, quantity, reason, created_at, products(name), users(full_name)')
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -118,13 +121,14 @@ export function Dashboard() {
       if (inventoryData) {
         inventoryData.forEach(inv => {
           const prodName = (inv.products as any)?.name || 'Producto';
+          const userName = (inv.users as any)?.full_name || 'Sistema';
           invMovements.push({
             id: inv.id,
             type: inv.type as any,
             title: `${inv.type === 'entrada' ? 'Ingreso' : 'Salida'}: ${prodName}`,
             quantity: Number(inv.quantity),
             date: new Date(inv.created_at),
-            details: inv.reason || 'Sin motivo'
+            details: `Por: ${userName} • ${inv.reason || 'Sin motivo'}`
           });
         });
       }
@@ -221,14 +225,19 @@ export function Dashboard() {
               {movimientos.map((mov, i) => {
                 const isVenta = mov.type === 'venta';
                 const isEntrada = mov.type === 'entrada';
-                const iconBg = isVenta ? 'rgba(16, 185, 129, 0.1)' : isEntrada ? 'rgba(59, 130, 246, 0.1)' : 'rgba(249, 115, 22, 0.1)';
-                const iconColor = isVenta ? 'var(--color-success)' : isEntrada ? 'var(--color-primary)' : 'var(--color-warning)';
+                const isAnulacion = mov.title === 'Venta Anulada';
+                
+                let iconBg = 'rgba(249, 115, 22, 0.1)';
+                let iconColor = 'var(--color-warning)';
+                if (isVenta) { iconBg = 'rgba(16, 185, 129, 0.1)'; iconColor = 'var(--color-success)'; }
+                if (isEntrada) { iconBg = 'rgba(59, 130, 246, 0.1)'; iconColor = 'var(--color-primary)'; }
+                if (isAnulacion) { iconBg = 'rgba(239, 68, 68, 0.1)'; iconColor = 'var(--color-danger)'; }
                 
                 return (
                   <div key={`${mov.id}-${i}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-4)', borderBottom: i < movimientos.length - 1 ? '1px solid var(--color-border)' : 'none', backgroundColor: 'var(--color-surface)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
                       <div style={{ padding: 'var(--space-2)', borderRadius: '50%', backgroundColor: iconBg, color: iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {isVenta ? <DollarSign size={18} /> : <Package size={18} />}
+                        {isVenta ? <DollarSign size={18} /> : isAnulacion ? <AlertTriangle size={18} /> : <Package size={18} />}
                       </div>
                       <div>
                         <h4 style={{ fontWeight: 600, fontSize: 'var(--text-sm)', margin: 0, color: 'var(--color-text-main)' }}>{mov.title}</h4>
@@ -237,8 +246,9 @@ export function Dashboard() {
                         </p>
                       </div>
                     </div>
-                    <div style={{ fontWeight: 'bold', color: isVenta ? 'var(--color-success)' : isEntrada ? 'var(--color-primary)' : 'var(--color-danger)' }}>
+                    <div style={{ fontWeight: 'bold', color: iconColor }}>
                       {isVenta && mov.amount ? `+${formatCLP(mov.amount)}` : 
+                       isAnulacion && mov.amount ? `-${formatCLP(mov.amount)}` :
                        isEntrada ? `+${mov.quantity} ud.` : 
                        `-${mov.quantity} ud.`}
                     </div>

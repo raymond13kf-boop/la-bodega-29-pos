@@ -27,8 +27,10 @@ export function Inventario() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   
   // Form states
-  const [formData, setFormData] = useState({
-    name: '', sku: '', barcode: '', sale_price: 0, cost_price: 0, stock: 0, min_stock: 5, category_id: ''
+  const [formData, setFormData] = useState<{
+    name: string; sku: string; barcode: string; sale_price: number; cost_price: number; stock: number | ''; min_stock: number; category_id: string;
+  }>({
+    name: '', sku: '', barcode: '', sale_price: 0, cost_price: 0, stock: '', min_stock: 5, category_id: ''
   });
 
   useEffect(() => {
@@ -72,7 +74,7 @@ export function Inventario() {
         barcode: generateBarcode(), 
         sale_price: 0, 
         cost_price: 0, 
-        stock: 0, 
+        stock: '', 
         min_stock: 5,
         category_id: categories.length > 0 ? categories[0].id : ''
       });
@@ -85,6 +87,7 @@ export function Inventario() {
     
     const payload = {
       ...formData,
+      stock: formData.stock === '' ? 0 : formData.stock,
       category_id: formData.category_id || null
     };
 
@@ -253,7 +256,7 @@ export function Inventario() {
             <CurrencyInput label="Precio de Venta" required value={formData.sale_price} onChange={val => setFormData({...formData, sale_price: val})} fullWidth />
           </div>
           <div className="flex gap-4">
-            <Input label="Stock Actual" type="number" required value={formData.stock} onChange={e => setFormData({...formData, stock: Number(e.target.value)})} fullWidth />
+            <Input label="Stock Actual" type="number" required value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value === '' ? '' : Number(e.target.value)})} fullWidth />
             <Input label="Stock Mínimo (Alerta)" type="number" required value={formData.min_stock} onChange={e => setFormData({...formData, min_stock: Number(e.target.value)})} fullWidth />
           </div>
           <div className="flex justify-end gap-2 mt-4">

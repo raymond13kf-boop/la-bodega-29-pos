@@ -217,35 +217,34 @@ export function Dashboard() {
           ) : movimientos.length === 0 ? (
             <p className="text-muted text-center" style={{ padding: 'var(--space-8) 0' }}>No hay movimientos registrados.</p>
           ) : (
-            <div className="flex-col gap-0 border rounded-md overflow-hidden">
-              {movimientos.map((mov, i) => (
-                <div key={`${mov.id}-${i}`} className="flex justify-between items-center p-4 border-b last:border-b-0 bg-white hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className={`p-2 rounded-full ${
-                      mov.type === 'venta' ? 'bg-green-100 text-green-700' :
-                      mov.type === 'entrada' ? 'bg-blue-100 text-blue-700' :
-                      'bg-orange-100 text-orange-700'
-                    }`}>
-                      {mov.type === 'venta' ? <DollarSign size={18} /> : <Package size={18} />}
+            <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--color-border)', borderRadius: 'var(--border-radius-md)', overflow: 'hidden' }}>
+              {movimientos.map((mov, i) => {
+                const isVenta = mov.type === 'venta';
+                const isEntrada = mov.type === 'entrada';
+                const iconBg = isVenta ? 'rgba(16, 185, 129, 0.1)' : isEntrada ? 'rgba(59, 130, 246, 0.1)' : 'rgba(249, 115, 22, 0.1)';
+                const iconColor = isVenta ? 'var(--color-success)' : isEntrada ? 'var(--color-primary)' : 'var(--color-warning)';
+                
+                return (
+                  <div key={`${mov.id}-${i}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-4)', borderBottom: i < movimientos.length - 1 ? '1px solid var(--color-border)' : 'none', backgroundColor: 'var(--color-surface)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+                      <div style={{ padding: 'var(--space-2)', borderRadius: '50%', backgroundColor: iconBg, color: iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {isVenta ? <DollarSign size={18} /> : <Package size={18} />}
+                      </div>
+                      <div>
+                        <h4 style={{ fontWeight: 600, fontSize: 'var(--text-sm)', margin: 0, color: 'var(--color-text-main)' }}>{mov.title}</h4>
+                        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: '4px 0 0 0' }}>
+                          {mov.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {mov.details}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="font-semibold text-sm">{mov.title}</h4>
-                      <p className="text-xs text-muted">
-                        {mov.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {mov.details}
-                      </p>
+                    <div style={{ fontWeight: 'bold', color: isVenta ? 'var(--color-success)' : isEntrada ? 'var(--color-primary)' : 'var(--color-danger)' }}>
+                      {isVenta && mov.amount ? `+${formatCLP(mov.amount)}` : 
+                       isEntrada ? `+${mov.quantity} ud.` : 
+                       `-${mov.quantity} ud.`}
                     </div>
                   </div>
-                  <div className={`font-bold ${
-                    mov.type === 'venta' ? 'text-success' : 
-                    mov.type === 'entrada' ? 'text-primary' : 
-                    'text-danger'
-                  }`}>
-                    {mov.type === 'venta' && mov.amount ? `+${formatCLP(mov.amount)}` : 
-                     mov.type === 'entrada' ? `+${mov.quantity} ud.` : 
-                     `-${mov.quantity} ud.`}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>

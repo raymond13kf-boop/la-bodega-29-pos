@@ -26,10 +26,10 @@ export function Modal({ isOpen, onClose, title, children, width = 'md' }: ModalP
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onMouseDown={onClose}>
       <div 
         className={clsx('modal-container', `modal-${width}`)} 
-        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
           <h3 className="modal-title">{title}</h3>

@@ -34,7 +34,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       <aside className={clsx('sidebar', isOpen && 'open')}>
         <div className="sidebar-header">
           <div className="sidebar-brand">
-            <Store className="sidebar-logo" size={24} />
+            <img src="/logo.png" alt="La Bodega 29 Logo" style={{ width: '40px', height: '40px', objectFit: 'contain', borderRadius: '50%' }} />
             <h2>La Bodega 29</h2>
           </div>
           <button className="sidebar-close" onClick={onClose}>

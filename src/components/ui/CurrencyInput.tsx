@@ -48,14 +48,14 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
     return (
       <div className={clsx('input-group', fullWidth && 'w-full', className)}>
         {label && <label className="input-label">{label}</label>}
-        <div className="input-wrapper relative">
-          <span className="absolute left-3 text-muted" style={{ zIndex: 1, left: '12px' }}>$</span>
+        <div className="input-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <span style={{ position: 'absolute', left: '12px', zIndex: 1, color: 'var(--color-text-muted)', fontSize: '0.9rem', pointerEvents: 'none' }}>$</span>
           {icon && <span className="input-icon" style={{ left: '28px' }}>{icon}</span>}
           <input
             ref={ref}
             type="text"
-            className={clsx('input-field pl-8', icon && 'has-icon-extra', error && 'has-error')}
-            style={{ paddingLeft: icon ? '2.5rem' : '1.5rem' }}
+            className={clsx('input-field', icon && 'has-icon-extra', error && 'has-error')}
+            style={{ paddingLeft: icon ? '2.5rem' : '1.8rem' }}
             value={displayValue}
             onChange={handleChange}
             onFocus={handleFocus}

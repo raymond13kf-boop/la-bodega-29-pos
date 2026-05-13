@@ -21,6 +21,8 @@ export function Ventas() {
   const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);
   const [amountPaid, setAmountPaid] = useState<number | ''>('');
   const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia'>('efectivo');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [entryDate, setEntryDate] = useState('');
 
   const [allProducts, setAllProducts] = useState<Product[]>([]);
 
@@ -63,79 +65,93 @@ export function Ventas() {
   }, [searchTerm, allProducts, addToCart]);
 
   const handleProcessPayment = async () => {
-    // 1. Get active cash register
-    const { data: activeRegister } = await supabase
-      .from('cash_registers')
-      .select('id')
-      .eq('status', 'open')
-      .order('opened_at', { ascending: false })
-      .limit(1)
-      .single();
+    if (isProcessing) return;
+    setIsProcessing(true);
 
-    if (!activeRegister) {
-      alert('Error: No hay un turno de caja abierto. Ve a Caja para abrir turno.');
-      return;
-    }
+    try {
+      // 1. Get active cash register
+      const { data: activeRegister } = await supabase
+        .from('cash_registers')
+        .select('id')
+        .eq('status', 'open')
+        .order('opened_at', { ascending: false })
+        .limit(1)
+        .single();
 
-    const userId = JSON.parse(localStorage.getItem('pos_session') || '{}').id;
+      if (!activeRegister) {
+        alert('Error: No hay un turno de caja abierto. Ve a Caja para abrir turno.');
+        return;
+      }
 
-    // 2. Create Sale
-    const { data: saleData, error: saleError } = await supabase
-      .from('sales')
-      .insert([{
+      const userId = JSON.parse(localStorage.getItem('pos_session') || '{}').id;
+
+      // 2. Create Sale
+      const salePayload: any = {
         cash_register_id: activeRegister.id,
         user_id: userId,
         subtotal: getCartSubtotal(),
         total: getCartTotal(),
         payment_method: paymentMethod
-      }])
-      .select()
-      .single();
+      };
 
-    if (saleError || !saleData) {
-      alert('Error al guardar la venta');
-      return;
+      if (entryDate) {
+        salePayload.created_at = new Date(entryDate).toISOString();
+      }
+
+      const { data: saleData, error: saleError } = await supabase
+        .from('sales')
+        .insert([salePayload])
+        .select()
+        .single();
+
+      if (saleError || !saleData) {
+        alert('Error al guardar la venta');
+        return;
+      }
+
+      // 3. Create Sale Items and reduce stock
+      const itemsToInsert = cart.map(item => ({
+        sale_id: saleData.id,
+        product_id: item.id,
+        quantity: item.quantity,
+        price: item.sale_price,
+        subtotal: item.subtotal,
+        cost_price: item.cost_price || 0
+      }));
+
+      await supabase.from('sale_items').insert(itemsToInsert);
+
+      // 4. Create Inventory Movements
+      const movementsToInsert = cart.map(item => ({
+        product_id: item.id,
+        user_id: userId,
+        type: 'salida',
+        quantity: item.quantity,
+        reason: `Venta #${saleData.id.slice(0, 8)}`,
+        created_at: salePayload.created_at || new Date().toISOString()
+      }));
+      await supabase.from('inventory_movements').insert(movementsToInsert);
+
+      // Update stock locally first to avoid UI jumps, DB handles actual update
+      cart.forEach(async item => {
+         const { data } = await supabase.from('products').select('stock').eq('id', item.id).single();
+         if (data) {
+            await supabase.from('products').update({ stock: data.stock - item.quantity }).eq('id', item.id);
+         }
+      });
+
+      alert('Venta procesada con éxito!');
+      clearCart();
+      setPaymentModalOpen(false);
+      setSearchTerm('');
+      setAmountPaid('');
+      setEntryDate('');
+    } catch (error) {
+      console.error(error);
+      alert('Hubo un error inesperado al procesar la venta.');
+    } finally {
+      setIsProcessing(false);
     }
-
-    // 3. Create Sale Items and reduce stock
-    const itemsToInsert = cart.map(item => ({
-      sale_id: saleData.id,
-      product_id: item.id,
-      quantity: item.quantity,
-      price: item.sale_price,
-      subtotal: item.subtotal,
-      cost_price: item.cost_price || 0
-    }));
-
-    await supabase.from('sale_items').insert(itemsToInsert);
-
-    // 4. Create Inventory Movements
-    const movementsToInsert = cart.map(item => ({
-      product_id: item.id,
-      user_id: userId,
-      type: 'salida',
-      quantity: item.quantity,
-      reason: `Venta #${saleData.id.slice(0, 8)}`
-    }));
-    await supabase.from('inventory_movements').insert(movementsToInsert);
-
-    // Update stock in parallel
-    await Promise.all(cart.map(item => 
-      supabase.rpc('decrement_stock', { p_id: item.id, qty: item.quantity })
-    ));
-    // Fallback if rpc doesn't exist, we just do normal update (ignoring race conditions for MVP)
-    cart.forEach(async item => {
-       const { data } = await supabase.from('products').select('stock').eq('id', item.id).single();
-       if (data) {
-          await supabase.from('products').update({ stock: data.stock - item.quantity }).eq('id', item.id);
-       }
-    });
-
-    alert('Venta procesada con éxito!');
-    clearCart();
-    setPaymentModalOpen(false);
-    setSearchTerm('');
-    setAmountPaid('');
   };
 
   const total = getCartTotal();
@@ -316,14 +332,24 @@ export function Ventas() {
             </div>
           )}
 
+          <div className="mb-6">
+            <Input 
+              type="datetime-local"
+              label="Fecha de Ingreso (Opcional)" 
+              value={entryDate}
+              onChange={e => setEntryDate(e.target.value)}
+              fullWidth
+            />
+          </div>
+
           <Button 
             variant="primary" 
             fullWidth 
             size="lg" 
             onClick={handleProcessPayment}
-            disabled={paymentMethod === 'efectivo' && !isPaidEnough}
+            disabled={isProcessing || (paymentMethod === 'efectivo' && !isPaidEnough)}
           >
-            Confirmar Venta
+            {isProcessing ? 'Procesando...' : 'Confirmar Venta'}
           </Button>
         </div>
       </Modal>

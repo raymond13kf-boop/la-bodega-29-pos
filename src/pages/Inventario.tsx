@@ -91,6 +91,17 @@ export function Inventario() {
       category_id: formData.category_id || null
     };
 
+    const normalizedName = formData.name.trim().toLowerCase();
+    const isDuplicate = products.some(p => 
+      p.id !== editingProduct?.id && 
+      p.name.trim().toLowerCase() === normalizedName
+    );
+
+    if (isDuplicate) {
+      alert(`Error: Ya existe un producto con el nombre "${formData.name}". Modifícalo para evitar confusiones en el sistema.`);
+      return;
+    }
+
     if (editingProduct) {
       const { error } = await supabase
         .from('products')

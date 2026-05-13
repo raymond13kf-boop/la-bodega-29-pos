@@ -71,13 +71,13 @@ export function Dashboard() {
       setTicketsHoy(totalTickets);
 
       // 2. Stock Bajo
-      const { count: stockBajoCount } = await supabase
+      const { data: stockData } = await supabase
         .from('products')
-        .select('id', { count: 'exact' })
-        .eq('active', true)
-        .lte('stock', 'min_stock');
+        .select('stock, min_stock')
+        .eq('active', true);
         
-      setStockBajo(stockBajoCount || 0);
+      const calculatedStockBajo = stockData ? stockData.filter(p => p.stock <= p.min_stock).length : 0;
+      setStockBajo(calculatedStockBajo);
 
       // 3. Más Vendido Hoy
       if (salesData && salesData.length > 0) {

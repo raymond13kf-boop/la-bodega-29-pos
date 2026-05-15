@@ -15,6 +15,10 @@ export function Caja() {
   const [activeRegister, setActiveRegister] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Forms
+  const [initialBalance, setInitialBalance] = useState<number>(0);
+  const [finalBalance, setFinalBalance] = useState<number>(0);
+
   // Additional states for calculations
   const [ventasEfectivo, setVentasEfectivo] = useState(0);
   const [ventasTarjeta, setVentasTarjeta] = useState(0);

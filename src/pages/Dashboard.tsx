@@ -242,7 +242,7 @@ export function Dashboard() {
                       <div>
                         <h4 style={{ fontWeight: 600, fontSize: 'var(--text-sm)', margin: 0, color: 'var(--color-text-main)' }}>{mov.title}</h4>
                         <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: '4px 0 0 0' }}>
-                          {mov.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {mov.details}
+                          {mov.date.toLocaleDateString()} {mov.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {mov.details}
                         </p>
                       </div>
                     </div>

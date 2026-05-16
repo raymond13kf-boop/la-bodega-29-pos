@@ -64,6 +64,20 @@ export function Ventas() {
     }
   }, [searchTerm, allProducts, addToCart]);
 
+  // Handle responsive initial products limit
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 900);
+  
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 900);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Determine what to show in catalog
+  const displayProducts = searchTerm 
+    ? searchResults 
+    : (isMobile ? allProducts.slice(0, 3) : allProducts);
+
   const handleProcessPayment = async () => {
     if (isProcessing) return;
     setIsProcessing(true);
@@ -174,7 +188,7 @@ export function Ventas() {
             />
           </CardHeader>
           <CardContent className="catalog-grid">
-            {searchResults.map(product => (
+            {displayProducts.map(product => (
               <div key={product.id} className="product-card" onClick={() => addToCart(product)}>
                 <div className="product-name">{product.name}</div>
                 <div className="product-price">{formatCLP(product.sale_price)}</div>

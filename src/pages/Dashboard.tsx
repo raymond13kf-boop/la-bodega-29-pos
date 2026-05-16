@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
-import { DollarSign, ShoppingBag, AlertTriangle, TrendingUp, Package, ArrowRightLeft } from 'lucide-react';
+import { DollarSign, ShoppingBag, AlertTriangle, TrendingUp, Package, ArrowRightLeft, Archive } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 const formatCLP = (amount: number) => {
@@ -24,6 +24,7 @@ export function Dashboard() {
   const [ventasHoy, setVentasHoy] = useState(0);
   const [ticketsHoy, setTicketsHoy] = useState(0);
   const [stockBajo, setStockBajo] = useState(0);
+  const [totalStock, setTotalStock] = useState(0);
   const [masVendido, setMasVendido] = useState<string>('Calculando...');
   const [movimientos, setMovimientos] = useState<Movement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -70,14 +71,17 @@ export function Dashboard() {
       setVentasHoy(totalVentas);
       setTicketsHoy(totalTickets);
 
-      // 2. Stock Bajo
+      // 2. Stock Bajo y Total
       const { data: stockData } = await supabase
         .from('products')
         .select('stock, min_stock')
         .eq('active', true);
         
       const calculatedStockBajo = stockData ? stockData.filter(p => p.stock <= p.min_stock).length : 0;
+      const calculatedTotalStock = stockData ? stockData.reduce((acc, p) => acc + (p.stock || 0), 0) : 0;
+      
       setStockBajo(calculatedStockBajo);
+      setTotalStock(calculatedTotalStock);
 
       // 3. Más Vendido Hoy
       if (salesData && salesData.length > 0) {
@@ -189,6 +193,18 @@ export function Dashboard() {
             <div>
               <p className="text-sm text-muted">Stock Bajo</p>
               <h3 className="text-xl font-bold">{isLoading ? '...' : `${stockBajo} Productos`}</h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+            <div style={{ padding: 'var(--space-3)', backgroundColor: 'rgba(139, 92, 246, 0.1)', color: 'rgb(139, 92, 246)', borderRadius: 'var(--border-radius-md)' }}>
+              <Archive size={24} />
+            </div>
+            <div>
+              <p className="text-sm text-muted">Artículos en Almacén</p>
+              <h3 className="text-xl font-bold">{isLoading ? '...' : `${totalStock} Unidades`}</h3>
             </div>
           </CardContent>
         </Card>

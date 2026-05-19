@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore, type UserPermissions } from './store/authStore';
+import { supabase } from './lib/supabase';
 import './App.css';
 
 // Placeholder Pages
@@ -30,6 +31,64 @@ function App() {
   useEffect(() => {
     checkSession();
   }, [checkSession]);
+
+  // Rutina de saneamiento automático de stock negativo en BD (Regla 2, 4)
+  useEffect(() => {
+    if (!user) return;
+
+    const correctNegativeStock = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, name, stock')
+          .lt('stock', 0);
+
+        if (error) {
+          console.error('Error al consultar stock negativo:', error);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          console.warn('Se detectaron productos con stock negativo en la base de datos:', data);
+          const correctedItems: string[] = [];
+
+          for (const product of data) {
+            const originalStock = product.stock;
+            // 1. Corregir a 0
+            const { error: updateError } = await supabase
+              .from('products')
+              .update({ stock: 0 })
+              .eq('id', product.id);
+
+            if (!updateError) {
+              correctedItems.push(`${product.name} (era ${originalStock})`);
+
+              // 2. Registrar movimiento de inventario de ajuste (trazabilidad y auditoría)
+              await supabase.from('inventory_movements').insert([{
+                product_id: product.id,
+                user_id: user.id,
+                type: 'entrada',
+                quantity: Math.abs(originalStock),
+                reason: `Saneamiento automático: stock negativo corregido de ${originalStock} a 0`
+              }]);
+            } else {
+              console.error(`Error al corregir stock del producto ${product.name}:`, updateError);
+            }
+          }
+
+          if (correctedItems.length > 0) {
+            alert(
+              `[SISTEMA DE INVENTARIO] Alerta de Integridad:\nSe detectaron y corrigieron automáticamente a 0 los siguientes productos con stock negativo en la base de datos:\n\n${correctedItems.join('\n')}`
+            );
+          }
+        }
+      } catch (e) {
+        console.error('Excepción en rutina de saneamiento de stock:', e);
+      }
+    };
+
+    correctNegativeStock();
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;

@@ -34,9 +34,10 @@ export const usePosStore = create<PosState>((set, get) => ({
   discount: 0,
 
   addToCart: (product) => set((state) => {
+    const availableStock = Math.max(0, product.stock);
     const existing = state.cart.find(item => item.id === product.id);
     if (existing) {
-      if (existing.quantity >= product.stock) {
+      if (existing.quantity >= availableStock) {
         alert('Stock insuficiente para agregar más unidades.');
         return state;
       }
@@ -48,7 +49,7 @@ export const usePosStore = create<PosState>((set, get) => ({
         )
       };
     }
-    if (product.stock <= 0) {
+    if (availableStock <= 0) {
       alert('Producto sin stock disponible.');
       return state;
     }
@@ -64,9 +65,10 @@ export const usePosStore = create<PosState>((set, get) => ({
   updateQuantity: (productId, quantity) => set((state) => ({
     cart: state.cart.map(item => {
       if (item.id === productId) {
+        const availableStock = Math.max(0, item.stock);
         // Prevent exceeding stock
-        const validQuantity = Math.min(Math.max(1, quantity), item.stock);
-        if (quantity > item.stock) alert('No puedes vender más del stock disponible.');
+        const validQuantity = Math.min(Math.max(1, quantity), availableStock);
+        if (quantity > availableStock) alert('No puedes vender más del stock disponible.');
         return { ...item, quantity: validQuantity, subtotal: validQuantity * item.sale_price };
       }
       return item;

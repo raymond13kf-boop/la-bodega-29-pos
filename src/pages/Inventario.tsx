@@ -8,6 +8,7 @@ import { CurrencyInput } from '../components/ui/CurrencyInput';
 import { Modal } from '../components/ui/Modal';
 import { Plus, Search, Edit2, Trash2 } from 'lucide-react';
 import { type Product } from '../store/posStore';
+import { useAuthStore } from '../store/authStore';
 
 const formatCLP = (amount: number) => {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
@@ -17,6 +18,7 @@ const generateSKU = () => `B29-${Math.floor(1000 + Math.random() * 9000)}`;
 const generateBarcode = () => `780${Date.now().toString().slice(-9)}`;
 
 export function Inventario() {
+  const { user } = useAuthStore();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -122,16 +124,39 @@ export function Inventario() {
         .update(payload)
         .eq('id', editingProduct.id);
       if (!error) {
+        // Registrar movimiento si el stock cambió
+        const oldStock = editingProduct.stock;
+        const diff = requestedStock - oldStock;
+        if (diff !== 0) {
+          await supabase.from('inventory_movements').insert([{
+            product_id: editingProduct.id,
+            user_id: user?.id || null,
+            type: diff > 0 ? 'entrada' : 'salida',
+            quantity: Math.abs(diff),
+            reason: diff > 0 ? 'Ingreso de stock' : 'Salida de stock'
+          }]);
+        }
         setIsModalOpen(false);
         fetchData();
       } else {
         alert('Error actualizando producto');
       }
     } else {
-      const { error } = await supabase
+      const { data: insertedData, error } = await supabase
         .from('products')
-        .insert([payload]);
+        .insert([payload])
+        .select();
       if (!error) {
+        // Registrar movimiento si el stock inicial es mayor a 0
+        if (requestedStock > 0 && insertedData && insertedData.length > 0) {
+          await supabase.from('inventory_movements').insert([{
+            product_id: insertedData[0].id,
+            user_id: user?.id || null,
+            type: 'entrada',
+            quantity: requestedStock,
+            reason: 'Ingreso inicial de stock'
+          }]);
+        }
         setIsModalOpen(false);
         fetchData();
       } else {

@@ -3,9 +3,18 @@ import { supabase } from '../lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { DollarSign, ShoppingBag, AlertTriangle, TrendingUp, Package, ArrowRightLeft, Archive } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 
 const formatCLP = (amount: number) => {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
+};
+
+const getLocalDateString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 interface Movement {
@@ -21,6 +30,10 @@ interface Movement {
 export function Dashboard() {
   const { user } = useAuthStore();
   
+  const todayStr = getLocalDateString(new Date());
+  const [startDate, setStartDate] = useState(todayStr);
+  const [endDate, setEndDate] = useState(todayStr);
+
   const [ventasHoy, setVentasHoy] = useState(0);
   const [ticketsHoy, setTicketsHoy] = useState(0);
   const [stockBajo, setStockBajo] = useState(0);
@@ -31,20 +44,23 @@ export function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [startDate, endDate]);
 
   const fetchDashboardData = async () => {
     setIsLoading(true);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayISO = today.toISOString();
-
+    
     try {
-      // 1. Ventas y Tickets de Hoy
+      const start = new Date(startDate + 'T00:00:00');
+      const end = new Date(endDate + 'T23:59:59.999');
+      const startISO = start.toISOString();
+      const endISO = end.toISOString();
+
+      // 1. Ventas y Tickets del Periodo
       const { data: salesData } = await supabase
         .from('sales')
         .select('id, total, created_at, status, users(full_name)')
-        .gte('created_at', todayISO);
+        .gte('created_at', startISO)
+        .lte('created_at', endISO);
 
       let totalVentas = 0;
       let totalTickets = 0;
@@ -71,7 +87,7 @@ export function Dashboard() {
       setVentasHoy(totalVentas);
       setTicketsHoy(totalTickets);
 
-      // 2. Stock Bajo y Total
+      // 2. Stock Bajo y Total (Siempre tiempo real actual)
       const { data: stockData } = await supabase
         .from('products')
         .select('stock, min_stock')
@@ -83,7 +99,7 @@ export function Dashboard() {
       setStockBajo(calculatedStockBajo);
       setTotalStock(calculatedTotalStock);
 
-      // 3. Más Vendido Hoy
+      // 3. Más Vendido en el Periodo
       if (salesData && salesData.length > 0) {
         const saleIds = salesData.map(s => s.id);
         const { data: itemsData } = await supabase
@@ -108,18 +124,19 @@ export function Dashboard() {
           }
           setMasVendido(topProduct);
         } else {
-          setMasVendido('Sin ventas hoy');
+          setMasVendido('Sin ventas en el periodo');
         }
       } else {
-        setMasVendido('Sin ventas hoy');
+        setMasVendido('Sin ventas en el periodo');
       }
 
-      // 4. Movimientos de Bodega Recientes
+      // 4. Movimientos de Bodega en el Periodo
       const { data: inventoryData } = await supabase
         .from('inventory_movements')
         .select('id, type, quantity, reason, created_at, products(name), users(full_name)')
-        .order('created_at', { ascending: false })
-        .limit(20);
+        .gte('created_at', startISO)
+        .lte('created_at', endISO)
+        .order('created_at', { ascending: false });
 
       const invMovements: Movement[] = [];
       if (inventoryData) {
@@ -137,10 +154,10 @@ export function Dashboard() {
         });
       }
 
-      // Combinar y ordenar movimientos (más recientes primero)
+      // Combinar y ordenar movimientos (más recientes primero, límite 100)
       const allMovements = [...salesMovements, ...invMovements]
         .sort((a, b) => b.date.getTime() - a.date.getTime())
-        .slice(0, 15); // Mostrar los últimos 15
+        .slice(0, 100);
 
       setMovimientos(allMovements);
 
@@ -151,14 +168,92 @@ export function Dashboard() {
     }
   };
 
+  const handleQuickFilter = (days: number | 'month') => {
+    const today = new Date();
+    const end = getLocalDateString(today);
+    let start = end;
+    
+    if (days === 'month') {
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      start = getLocalDateString(firstDay);
+    } else if (typeof days === 'number') {
+      const past = new Date();
+      past.setDate(today.getDate() - days);
+      start = getLocalDateString(past);
+    }
+    
+    setStartDate(start);
+    setEndDate(end);
+  };
+
   return (
     <div className="flex-col gap-4">
       <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-6)' }}>
         <div>
-          <h1 className="text-2xl font-bold">Resumen de Hoy</h1>
+          <h1 className="text-2xl font-bold">Resumen de {startDate === endDate && startDate === todayStr ? 'Hoy' : 'Periodo'}</h1>
           <p className="text-muted">Bienvenido de nuevo, {user?.full_name}</p>
         </div>
       </div>
+
+      {/* Rango de Fechas y Filtro */}
+      <Card style={{ marginBottom: 'var(--space-6)' }}>
+        <CardContent style={{ padding: 'var(--space-4)' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 'var(--space-4)', flex: 1 }}>
+              <div style={{ minWidth: '160px', flex: '1 1 0%' }}>
+                <Input 
+                  label="Fecha Desde" 
+                  type="date" 
+                  value={startDate} 
+                  max={endDate}
+                  onChange={e => setStartDate(e.target.value)} 
+                  fullWidth
+                />
+              </div>
+              <div style={{ minWidth: '160px', flex: '1 1 0%' }}>
+                <Input 
+                  label="Fecha Hasta" 
+                  type="date" 
+                  value={endDate} 
+                  min={startDate}
+                  onChange={e => setEndDate(e.target.value)} 
+                  fullWidth
+                />
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignSelf: 'flex-end' }}>
+              <Button 
+                variant={startDate === todayStr && endDate === todayStr ? 'primary' : 'outline'} 
+                size="sm" 
+                onClick={() => handleQuickFilter(0)}
+              >
+                Hoy
+              </Button>
+              <Button 
+                variant={
+                  startDate === getLocalDateString(new Date(new Date().setDate(new Date().getDate() - 6))) && 
+                  endDate === todayStr ? 'primary' : 'outline'
+                } 
+                size="sm" 
+                onClick={() => handleQuickFilter(6)}
+              >
+                Últimos 7 días
+              </Button>
+              <Button 
+                variant={
+                  startDate === getLocalDateString(new Date(new Date().getFullYear(), new Date().getMonth(), 1)) && 
+                  endDate === todayStr ? 'primary' : 'outline'
+                } 
+                size="sm" 
+                onClick={() => handleQuickFilter('month')}
+              >
+                Este mes
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
         <Card>
@@ -167,7 +262,7 @@ export function Dashboard() {
               <DollarSign size={24} />
             </div>
             <div>
-              <p className="text-sm text-muted">Ventas del Día</p>
+              <p className="text-sm text-muted">Ventas del {startDate === endDate && startDate === todayStr ? 'Día' : 'Periodo'}</p>
               <h3 className="text-xl font-bold">{isLoading ? '...' : formatCLP(ventasHoy)}</h3>
             </div>
           </CardContent>

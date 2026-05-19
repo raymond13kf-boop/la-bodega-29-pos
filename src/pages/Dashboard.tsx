@@ -25,6 +25,7 @@ interface Movement {
   quantity?: number;
   date: Date;
   details: string;
+  paymentMethod?: string;
 }
 
 export function Dashboard() {
@@ -58,7 +59,7 @@ export function Dashboard() {
       // 1. Ventas y Tickets del Periodo
       const { data: salesData } = await supabase
         .from('sales')
-        .select('id, total, created_at, status, users(full_name)')
+        .select('id, total, created_at, status, payment_method, users(full_name)')
         .gte('created_at', startISO)
         .lte('created_at', endISO);
 
@@ -80,7 +81,8 @@ export function Dashboard() {
             title: isVoided ? 'Venta Anulada' : 'Nueva Venta',
             amount: Number(sale.total),
             date: new Date(sale.created_at),
-            details: `Ticket #${sale.id.slice(0, 8)} • ${isVoided ? 'Anulada por: ' : 'Vendió: '}${sellerName}`
+            details: `Ticket #${sale.id.slice(0, 8)} • ${isVoided ? 'Anulada por: ' : 'Vendió: '}${sellerName}`,
+            paymentMethod: (sale as any).payment_method
           });
         });
       }
@@ -377,7 +379,32 @@ export function Dashboard() {
                         {isVenta ? <DollarSign size={18} /> : isAnulacion ? <AlertTriangle size={18} /> : <Package size={18} />}
                       </div>
                       <div>
-                        <h4 style={{ fontWeight: 600, fontSize: 'var(--text-sm)', margin: 0, color: 'var(--color-text-main)' }}>{mov.title}</h4>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+                          <h4 style={{ fontWeight: 600, fontSize: 'var(--text-sm)', margin: 0, color: 'var(--color-text-main)' }}>{mov.title}</h4>
+                          {isVenta && mov.paymentMethod && (
+                            <span style={{
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              textTransform: 'uppercase',
+                              padding: '2px 8px',
+                              borderRadius: '12px',
+                              backgroundColor: mov.paymentMethod === 'efectivo' 
+                                ? 'rgba(16, 185, 129, 0.15)' 
+                                : mov.paymentMethod === 'tarjeta'
+                                ? 'rgba(59, 130, 246, 0.15)'
+                                : 'rgba(139, 92, 246, 0.15)',
+                              color: mov.paymentMethod === 'efectivo' 
+                                ? 'var(--color-success)' 
+                                : mov.paymentMethod === 'tarjeta'
+                                ? 'var(--color-secondary)'
+                                : 'rgb(139, 92, 246)',
+                              display: 'inline-flex',
+                              alignItems: 'center'
+                            }}>
+                              {mov.paymentMethod === 'efectivo' ? 'Efectivo' : mov.paymentMethod === 'tarjeta' ? 'Tarjeta' : 'Transferencia'}
+                            </span>
+                          )}
+                        </div>
                         <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', margin: '4px 0 0 0' }}>
                           {mov.date.toLocaleDateString()} {mov.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {mov.details}
                         </p>

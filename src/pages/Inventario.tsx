@@ -6,9 +6,10 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { CurrencyInput } from '../components/ui/CurrencyInput';
 import { Modal } from '../components/ui/Modal';
-import { Plus, Search, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Download } from 'lucide-react';
 import { type Product } from '../store/posStore';
 import { useAuthStore } from '../store/authStore';
+import * as XLSX from 'xlsx';
 
 const formatCLP = (amount: number) => {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
@@ -179,6 +180,42 @@ export function Inventario() {
     (p.categories?.name && p.categories.name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  const handleExportExcel = () => {
+    // Definir el conjunto de datos mapeado exactamente con los datos de pantalla
+    const dataToExport = filteredProducts.map(product => {
+      const costo = product.cost_price || 0;
+      const venta = product.sale_price;
+      const ganancia = venta - costo;
+      const margen = venta > 0 ? (ganancia / venta) * 100 : 0;
+      const utilidad = ganancia * product.stock;
+
+      return {
+        'Producto': product.name,
+        'Código de Barras': product.barcode || '',
+        'SKU': product.sku || '',
+        'Categoría': product.categories?.name || 'Sin categoría',
+        'Precio de Costo': costo,
+        'Precio de Venta': venta,
+        'Margen de Ganancia ($)': ganancia,
+        'Margen de Ganancia (%)': `${margen.toFixed(1)}%`,
+        'Stock Actual': product.stock,
+        'Utilidad Estimada Total': utilidad
+      };
+    });
+
+    // Crear hoja de trabajo
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    
+    // Crear libro de trabajo
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventario');
+
+    // Descargar archivo Excel con la fecha actual local
+    const todayLocal = new Date();
+    const dateStr = `${todayLocal.getFullYear()}-${String(todayLocal.getMonth() + 1).padStart(2, '0')}-${String(todayLocal.getDate()).padStart(2, '0')}`;
+    XLSX.writeFile(workbook, `Inventario_${dateStr}.xlsx`);
+  };
+
   return (
     <div className="flex-col gap-4">
       <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-6)' }}>
@@ -186,10 +223,16 @@ export function Inventario() {
           <h1 className="text-2xl font-bold">Inventario</h1>
           <p className="text-muted">Gestiona tus productos, categorías y utilidades</p>
         </div>
-        <Button variant="primary" onClick={() => handleOpenModal()}>
-          <Plus size={18} />
-          Nuevo Producto
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportExcel}>
+            <Download size={18} />
+            Exportar a Excel
+          </Button>
+          <Button variant="primary" onClick={() => handleOpenModal()}>
+            <Plus size={18} />
+            Nuevo Producto
+          </Button>
+        </div>
       </div>
 
       <Card>

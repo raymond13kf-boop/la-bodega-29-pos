@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
-import { DollarSign, ShoppingBag, AlertTriangle, TrendingUp, Package, ArrowRightLeft, Archive } from 'lucide-react';
+import { DollarSign, ShoppingBag, AlertTriangle, TrendingUp, Package, ArrowRightLeft, Archive, Trash2 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -186,6 +186,32 @@ export function Dashboard() {
     setEndDate(end);
   };
 
+  const handleDeleteMovement = async (id: string) => {
+    if (user?.role !== 'admin') {
+      alert('Error: No tienes permisos para realizar esta acción.');
+      return;
+    }
+
+    if (window.confirm('¿Estás seguro de que deseas eliminar este movimiento de inventario? Esta acción no se puede deshacer.')) {
+      try {
+        const { error } = await supabase
+          .from('inventory_movements')
+          .delete()
+          .eq('id', id);
+
+        if (error) {
+          console.error("Error al eliminar el movimiento:", error);
+          alert('Hubo un error al intentar eliminar el movimiento: ' + error.message);
+        } else {
+          fetchDashboardData();
+        }
+      } catch (err) {
+        console.error("Excepción al eliminar el movimiento:", err);
+        alert('Ocurrió un error inesperado al intentar eliminar el movimiento.');
+      }
+    }
+  };
+
   return (
     <div className="flex-col gap-4">
       <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-6)' }}>
@@ -357,11 +383,35 @@ export function Dashboard() {
                         </p>
                       </div>
                     </div>
-                    <div style={{ fontWeight: 'bold', color: iconColor }}>
-                      {isVenta && mov.amount ? `+${formatCLP(mov.amount)}` : 
-                       isAnulacion && mov.amount ? `-${formatCLP(mov.amount)}` :
-                       isEntrada ? `+${mov.quantity} ud.` : 
-                       `-${mov.quantity} ud.`}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+                      <div style={{ fontWeight: 'bold', color: iconColor }}>
+                        {isVenta && mov.amount ? `+${formatCLP(mov.amount)}` : 
+                         isAnulacion && mov.amount ? `-${formatCLP(mov.amount)}` :
+                         isEntrada ? `+${mov.quantity} ud.` : 
+                         `-${mov.quantity} ud.`}
+                      </div>
+                      {user?.role === 'admin' && (mov.type === 'entrada' || mov.type === 'salida') && (
+                        <button 
+                          onClick={() => handleDeleteMovement(mov.id)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--color-danger)',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '4px',
+                            transition: 'background-color 0.2s',
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                          title="Eliminar movimiento de inventario"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

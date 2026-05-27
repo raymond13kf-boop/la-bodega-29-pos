@@ -9,6 +9,7 @@ import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Ventas } from './pages/Ventas';
 import { Inventario } from './pages/Inventario';
+import { Boletas } from './pages/Boletas';
 import { Caja } from './pages/Caja';
 import { Reportes } from './pages/Reportes';
 import { Usuarios } from './pages/Usuarios';
@@ -134,6 +135,11 @@ function App() {
           <Route path="inventario" element={
             <ProtectedRoute requiredPermission="can_inventory">
               <Inventario />
+            </ProtectedRoute>
+          } />
+          <Route path="boletas" element={
+            <ProtectedRoute requiredPermission="can_inventory">
+              <Boletas />
             </ProtectedRoute>
           } />
           <Route path="caja" element={

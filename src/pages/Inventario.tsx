@@ -29,9 +29,12 @@ export function Inventario() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   
+  // Form errors state
+  const [formErrors, setFormErrors] = useState<{ stock?: string; min_stock?: string }>({});
+
   // Form states
   const [formData, setFormData] = useState<{
-    name: string; sku: string; barcode: string; sale_price: number; cost_price: number; stock: number | ''; min_stock: number; category_id: string;
+    name: string; sku: string; barcode: string; sale_price: number; cost_price: number; stock: number | ''; min_stock: number | ''; category_id: string;
   }>({
     name: '', sku: '', barcode: '', sale_price: 0, cost_price: 0, stock: '', min_stock: 5, category_id: ''
   });
@@ -61,6 +64,7 @@ export function Inventario() {
   };
 
   const handleOpenModal = (product?: Product) => {
+    setFormErrors({});
     if (product) {
       setEditingProduct(product);
       setFormData({
@@ -88,6 +92,11 @@ export function Inventario() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (formErrors.stock || formErrors.min_stock) {
+      alert('Error: Por favor, corrija los errores de validación antes de guardar el producto.');
+      return;
+    }
+    
     const requestedStock = formData.stock === '' ? 0 : Number(formData.stock);
     if (requestedStock < 0) {
       alert('Error: El stock no puede ser menor a 0. Por favor, ingrese un valor de stock válido.');
@@ -95,7 +104,7 @@ export function Inventario() {
       return;
     }
 
-    const requestedMinStock = Number(formData.min_stock);
+    const requestedMinStock = formData.min_stock === '' ? 5 : Number(formData.min_stock);
     if (requestedMinStock < 0) {
       alert('Error: El stock mínimo no puede ser menor a 0.');
       return;
@@ -349,8 +358,56 @@ export function Inventario() {
             <CurrencyInput label="Precio de Venta" required value={formData.sale_price} onChange={val => setFormData({...formData, sale_price: val})} fullWidth />
           </div>
           <div className="flex gap-4">
-            <Input label="Stock Actual" type="number" min="0" required value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value === '' ? '' : Number(e.target.value)})} fullWidth />
-            <Input label="Stock Mínimo (Alerta)" type="number" min="0" required value={formData.min_stock} onChange={e => setFormData({...formData, min_stock: Number(e.target.value)})} fullWidth />
+            <Input 
+              label="Stock Actual" 
+              type="number" 
+              required 
+              value={formData.stock} 
+              error={formErrors.stock}
+              onWheel={e => e.currentTarget.blur()}
+              onKeyDown={e => {
+                if (['ArrowUp', 'ArrowDown', 'e', 'E', '+', '-', '.', ','].includes(e.key)) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={e => {
+                const val = e.target.value;
+                let errorMsg = '';
+                if (val === '') {
+                  errorMsg = 'El stock actual es obligatorio';
+                } else if (Number(val) < 0) {
+                  errorMsg = 'El stock no puede ser menor a 0';
+                }
+                setFormErrors(prev => ({ ...prev, stock: errorMsg }));
+                setFormData(prev => ({ ...prev, stock: val === '' ? '' : Number(val) }));
+              }}
+              fullWidth 
+            />
+            <Input 
+              label="Stock Mínimo (Alerta)" 
+              type="number" 
+              required 
+              value={formData.min_stock} 
+              error={formErrors.min_stock}
+              onWheel={e => e.currentTarget.blur()}
+              onKeyDown={e => {
+                if (['ArrowUp', 'ArrowDown', 'e', 'E', '+', '-', '.', ','].includes(e.key)) {
+                  e.preventDefault();
+                }
+              }}
+              onChange={e => {
+                const val = e.target.value;
+                let errorMsg = '';
+                if (val === '') {
+                  errorMsg = 'El stock mínimo es obligatorio';
+                } else if (Number(val) < 0) {
+                  errorMsg = 'El stock mínimo no puede ser menor a 0';
+                }
+                setFormErrors(prev => ({ ...prev, min_stock: errorMsg }));
+                setFormData(prev => ({ ...prev, min_stock: val === '' ? '' : Number(val) }));
+              }}
+              fullWidth 
+            />
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" type="button" onClick={() => setIsModalOpen(false)}>Cancelar</Button>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
-import { DollarSign, ShoppingBag, AlertTriangle, TrendingUp, Package, ArrowRightLeft, Archive, Trash2 } from 'lucide-react';
+import { DollarSign, ShoppingBag, AlertTriangle, TrendingUp, Package, ArrowRightLeft, Archive, Trash2, Lock, Unlock } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -19,7 +19,7 @@ const getLocalDateString = (date: Date) => {
 
 interface Movement {
   id: string;
-  type: 'venta' | 'entrada' | 'salida' | 'ajuste';
+  type: 'venta' | 'entrada' | 'salida' | 'ajuste' | 'caja_apertura' | 'caja_cierre';
   title: string;
   amount?: number;
   quantity?: number;
@@ -156,8 +156,61 @@ export function Dashboard() {
         });
       }
 
+      // 4.5. Aperturas y Cierres de Caja en el Periodo
+      const { data: registersData } = await supabase
+        .from('cash_registers')
+        .select(`
+          id, 
+          opened_at, 
+          closed_at, 
+          initial_balance, 
+          final_balance, 
+          difference,
+          opened_by_user:users!cash_registers_opened_by_fkey(full_name), 
+          closed_by_user:users!cash_registers_closed_by_fkey(full_name)
+        `);
+
+      const regMovements: Movement[] = [];
+      if (registersData) {
+        registersData.forEach(reg => {
+          const openedDate = new Date(reg.opened_at);
+          if (openedDate >= start && openedDate <= end) {
+            const userName = (Array.isArray(reg.opened_by_user) 
+              ? reg.opened_by_user[0]?.full_name 
+              : (reg.opened_by_user as any)?.full_name) || 'Desconocido';
+            regMovements.push({
+              id: `open-${reg.id}`,
+              type: 'caja_apertura',
+              title: 'Apertura de Caja',
+              amount: Number(reg.initial_balance),
+              date: openedDate,
+              details: `Monto inicial: ${formatCLP(reg.initial_balance)} • Responsable: ${userName}`
+            });
+          }
+
+          if (reg.closed_at) {
+            const closedDate = new Date(reg.closed_at);
+            if (closedDate >= start && closedDate <= end) {
+              const userName = (Array.isArray(reg.closed_by_user) 
+                ? reg.closed_by_user[0]?.full_name 
+                : (reg.closed_by_user as any)?.full_name) || 'Desconocido';
+              const diff = Number(reg.difference) || 0;
+              const diffText = diff === 0 ? 'Cuadrada' : diff > 0 ? `Sobrante: +${formatCLP(diff)}` : `Faltante: ${formatCLP(diff)}`;
+              regMovements.push({
+                id: `close-${reg.id}`,
+                type: 'caja_cierre',
+                title: 'Cierre de Caja',
+                amount: Number(reg.final_balance),
+                date: closedDate,
+                details: `Arqueo real: ${formatCLP(reg.final_balance)} (${diffText}) • Responsable: ${userName}`
+              });
+            }
+          }
+        });
+      }
+
       // Combinar y ordenar movimientos (más recientes primero, límite 100)
-      const allMovements = [...salesMovements, ...invMovements]
+      const allMovements = [...salesMovements, ...invMovements, ...regMovements]
         .sort((a, b) => b.date.getTime() - a.date.getTime())
         .slice(0, 100);
 
@@ -351,7 +404,7 @@ export function Dashboard() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ArrowRightLeft size={20} />
-            Movimientos Recientes (Ventas e Inventario)
+            Movimientos Recientes (Ventas, Inventario y Caja)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -365,18 +418,26 @@ export function Dashboard() {
                 const isVenta = mov.type === 'venta';
                 const isEntrada = mov.type === 'entrada';
                 const isAnulacion = mov.title === 'Venta Anulada';
+                const isApertura = mov.type === 'caja_apertura';
+                const isCierre = mov.type === 'caja_cierre';
                 
                 let iconBg = 'rgba(249, 115, 22, 0.1)';
                 let iconColor = 'var(--color-warning)';
                 if (isVenta) { iconBg = 'rgba(16, 185, 129, 0.1)'; iconColor = 'var(--color-success)'; }
                 if (isEntrada) { iconBg = 'rgba(59, 130, 246, 0.1)'; iconColor = 'var(--color-primary)'; }
                 if (isAnulacion) { iconBg = 'rgba(239, 68, 68, 0.1)'; iconColor = 'var(--color-danger)'; }
+                if (isApertura) { iconBg = 'rgba(234, 179, 8, 0.1)'; iconColor = 'var(--color-warning)'; }
+                if (isCierre) { iconBg = 'rgba(107, 114, 128, 0.1)'; iconColor = '#71717a'; }
                 
                 return (
                   <div key={`${mov.id}-${i}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-4)', borderBottom: i < movimientos.length - 1 ? '1px solid var(--color-border)' : 'none', backgroundColor: 'var(--color-surface)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
                       <div style={{ padding: 'var(--space-2)', borderRadius: '50%', backgroundColor: iconBg, color: iconColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {isVenta ? <DollarSign size={18} /> : isAnulacion ? <AlertTriangle size={18} /> : <Package size={18} />}
+                        {isVenta ? <DollarSign size={18} /> : 
+                         isAnulacion ? <AlertTriangle size={18} /> : 
+                         isApertura ? <Unlock size={18} /> : 
+                         isCierre ? <Lock size={18} /> : 
+                         <Package size={18} />}
                       </div>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
@@ -411,9 +472,11 @@ export function Dashboard() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
-                      <div style={{ fontWeight: 'bold', color: iconColor }}>
+                      <div style={{ fontWeight: 'bold', color: isCierre ? 'var(--color-text-main)' : iconColor }}>
                         {isVenta && mov.amount ? `+${formatCLP(mov.amount)}` : 
                          isAnulacion && mov.amount ? `-${formatCLP(mov.amount)}` :
+                         isApertura && mov.amount ? `${formatCLP(mov.amount)}` :
+                         isCierre && mov.amount ? `${formatCLP(mov.amount)}` :
                          isEntrada ? `+${mov.quantity} ud.` : 
                          `-${mov.quantity} ud.`}
                       </div>

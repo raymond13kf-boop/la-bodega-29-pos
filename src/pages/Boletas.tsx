@@ -57,6 +57,10 @@ export function Boletas() {
   const [addedItems, setAddedItems] = useState<BoletaItem[]>([]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
+  const getBoletaTotal = () => {
+    return addedItems.reduce((acc, item) => acc + item.total, 0);
+  };
+
   const totalAmount = addedItems.length > 0 ? getBoletaTotal() : manualTotalAmount;
 
   useEffect(() => {
@@ -154,10 +158,6 @@ export function Boletas() {
         return item;
       })
     );
-  };
-
-  const getBoletaTotal = () => {
-    return addedItems.reduce((acc, item) => acc + item.total, 0);
   };
 
   const handleOpenDetailModal = (boleta: Boleta) => {

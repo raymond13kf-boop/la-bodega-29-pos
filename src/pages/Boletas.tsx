@@ -52,9 +52,12 @@ export function Boletas() {
   const [supplier, setSupplier] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'debito' | 'credito' | 'otro'>('efectivo');
   const [amountPaid, setAmountPaid] = useState<number>(0);
+  const [manualTotalAmount, setManualTotalAmount] = useState<number>(0);
   const [selectedProductId, setSelectedProductId] = useState('');
   const [addedItems, setAddedItems] = useState<BoletaItem[]>([]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  const totalAmount = addedItems.length > 0 ? getBoletaTotal() : manualTotalAmount;
 
   useEffect(() => {
     fetchProducts();
@@ -100,6 +103,7 @@ export function Boletas() {
     setSupplier('');
     setPaymentMethod('efectivo');
     setAmountPaid(0);
+    setManualTotalAmount(0);
     setSelectedProductId(products.length > 0 ? products[0].id : '');
     setAddedItems([]);
     setFormErrors({});
@@ -168,7 +172,10 @@ export function Boletas() {
     if (!invoiceNumber.trim()) errors.invoiceNumber = 'El número de boleta es obligatorio';
     if (!purchaseDate) errors.purchaseDate = 'La fecha de compra es obligatoria';
     if (!supplier.trim()) errors.supplier = 'El proveedor es obligatorio';
-    if (addedItems.length === 0) errors.items = 'Debe agregar al menos un producto a la boleta';
+    
+    if (addedItems.length === 0 && manualTotalAmount <= 0) {
+      errors.manualTotalAmount = 'Debe ingresar un monto total para la boleta';
+    }
 
     const negativeCheck = addedItems.some(item => item.quantity <= 0 || item.net_price < 0 || item.gross_price < 0);
     if (negativeCheck) {
@@ -194,7 +201,7 @@ export function Boletas() {
       supplier: supplier.trim(),
       payment_method: paymentMethod,
       amount_paid: amountPaid,
-      total_amount: getBoletaTotal(),
+      total_amount: totalAmount,
       items: addedItems
     };
 
@@ -205,6 +212,7 @@ export function Boletas() {
 
     // Close Modal and Show Success
     setIsRegisterModalOpen(false);
+    setManualTotalAmount(0);
     alert('Boleta registrada administrativamente con éxito.');
   };
 
@@ -318,7 +326,7 @@ export function Boletas() {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ marginBottom: 'var(--space-4)' }}>
+          <div className={`grid grid-cols-1 ${addedItems.length === 0 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`} style={{ marginBottom: 'var(--space-4)' }}>
             <div className="input-group w-full">
               <label className="input-label">Forma de Pago</label>
               <select 
@@ -340,6 +348,15 @@ export function Boletas() {
               onChange={val => setAmountPaid(val)} 
               fullWidth 
             />
+            {addedItems.length === 0 && (
+              <CurrencyInput 
+                label="Monto Total de Boleta" 
+                required 
+                value={manualTotalAmount} 
+                onChange={val => setManualTotalAmount(val)} 
+                fullWidth 
+              />
+            )}
           </div>
 
           {/* Product Selection Row */}
@@ -469,7 +486,7 @@ export function Boletas() {
               </Table>
               <div className="items-table-footer">
                 <span>Total General de la Boleta:</span>
-                <span className="items-table-footer-val">{formatCLP(getBoletaTotal())}</span>
+                <span className="items-table-footer-val">{formatCLP(totalAmount)}</span>
               </div>
             </div>
           </div>
@@ -536,18 +553,26 @@ export function Boletas() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {selectedBoleta.items.map(item => (
-                      <TableRow key={item.id}>
-                        <TableCell>
-                          <div className="font-medium text-sm">{item.name}</div>
-                          {item.sku && <div className="text-xs text-muted">SKU: {item.sku}</div>}
+                    {selectedBoleta.items.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-6 text-muted text-sm">
+                          Esta boleta no tiene productos registrados.
                         </TableCell>
-                        <TableCell className="text-center">{item.quantity}</TableCell>
-                        <TableCell className="text-right">{formatCLP(item.net_price)}</TableCell>
-                        <TableCell className="text-right font-medium">{formatCLP(item.gross_price)}</TableCell>
-                        <TableCell className="text-right font-bold text-primary">{formatCLP(item.total)}</TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      selectedBoleta.items.map(item => (
+                        <TableRow key={item.id}>
+                          <TableCell>
+                            <div className="font-medium text-sm">{item.name}</div>
+                            {item.sku && <div className="text-xs text-muted">SKU: {item.sku}</div>}
+                          </TableCell>
+                          <TableCell className="text-center">{item.quantity}</TableCell>
+                          <TableCell className="text-right">{formatCLP(item.net_price)}</TableCell>
+                          <TableCell className="text-right font-medium">{formatCLP(item.gross_price)}</TableCell>
+                          <TableCell className="text-right font-bold text-primary">{formatCLP(item.total)}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </div>

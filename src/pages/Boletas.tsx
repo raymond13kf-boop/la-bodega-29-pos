@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { CurrencyInput } from '../components/ui/CurrencyInput';
 import { Modal } from '../components/ui/Modal';
-import { Plus, Search, Trash2, Eye, PlusCircle } from 'lucide-react';
+import { Plus, Search, Trash2, Eye, PlusCircle, Edit2 } from 'lucide-react';
 import './Boletas.css';
 
 interface BoletaItem {
@@ -17,6 +17,7 @@ interface BoletaItem {
   quantity: number;
   net_price: number;
   gross_price: number;
+  sale_price: number;
   total: number;
 }
 
@@ -38,24 +39,55 @@ const formatCLP = (amount: number) => {
 export function Boletas() {
   const [boletas, setBoletas] = useState<Boleta[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Autocomplete Search State
+  const [productSearch, setProductSearch] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
 
   // Modal State
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedBoleta, setSelectedBoleta] = useState<Boleta | null>(null);
 
-  // Form State
+  // Sub-modals for Product Create/Edit
+  const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
+  const [isEditProductModalOpen, setIsEditProductModalOpen] = useState(false);
+
+  // Form State - Register Boleta
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
   const [supplier, setSupplier] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'debito' | 'credito' | 'otro'>('efectivo');
   const [amountPaid, setAmountPaid] = useState<number>(0);
   const [manualTotalAmount, setManualTotalAmount] = useState<number>(0);
-  const [selectedProductId, setSelectedProductId] = useState('');
   const [addedItems, setAddedItems] = useState<BoletaItem[]>([]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
+  // Form State - New Product
+  const [newProductData, setNewProductData] = useState({
+    name: '',
+    category_id: '',
+    sku: '',
+    barcode: '',
+    cost_price: 0,
+    sale_price: 0,
+    min_stock: 5
+  });
+
+  // Form State - Edit Product
+  const [editProductData, setEditProductData] = useState({
+    id: '',
+    name: '',
+    category_id: '',
+    sku: '',
+    barcode: '',
+    sale_price: 0,
+    min_stock: 5
+  });
 
   const getBoletaTotal = () => {
     return addedItems.reduce((acc, item) => acc + item.total, 0);
@@ -65,10 +97,11 @@ export function Boletas() {
 
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
     loadBoletas();
   }, []);
 
-  // Fetch active products to allow selecting them
+  // Fetch active products from Supabase
   const fetchProducts = async () => {
     try {
       const { data, error } = await supabase
@@ -84,21 +117,71 @@ export function Boletas() {
     }
   };
 
-  // Load boletas from local storage
-  const loadBoletas = () => {
-    setIsLoading(true);
-    const stored = localStorage.getItem('pos_boletas');
-    if (stored) {
-      try {
-        setBoletas(JSON.parse(stored));
-      } catch (e) {
-        console.error('Error parsing stored boletas:', e);
-        setBoletas([]);
+  // Fetch categories from Supabase
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name');
+      if (!error && data) {
+        setCategories(data);
       }
-    } else {
-      setBoletas([]);
+    } catch (e) {
+      console.error('Error fetching categories for boletas:', e);
     }
-    setIsLoading(false);
+  };
+
+  // Load boletas from Supabase
+  const loadBoletas = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('boletas')
+        .select(`
+          *,
+          boleta_items (
+            *,
+            products (
+              name,
+              sku,
+              barcode
+            )
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        const mappedBoletas = data.map((b: any) => ({
+          id: b.id,
+          invoice_number: b.invoice_number,
+          purchase_date: b.purchase_date,
+          supplier: b.supplier,
+          payment_method: b.payment_method,
+          amount_paid: Number(b.amount_paid),
+          total_amount: Number(b.total_amount),
+          items: (b.boleta_items || []).map((item: any) => ({
+            id: item.product_id,
+            name: item.products?.name || 'Producto Eliminado',
+            sku: item.products?.sku || '',
+            barcode: item.products?.barcode || '',
+            quantity: Number(item.quantity),
+            net_price: Number(item.net_price),
+            gross_price: Number(item.gross_price),
+            sale_price: Number(item.sale_price),
+            total: Number(item.total)
+          }))
+        }));
+        setBoletas(mappedBoletas);
+      }
+    } catch (e) {
+      console.error('Error al cargar boletas de Supabase:', e);
+      alert('Error de conexión al cargar boletas');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleOpenRegisterModal = () => {
@@ -108,24 +191,18 @@ export function Boletas() {
     setPaymentMethod('efectivo');
     setAmountPaid(0);
     setManualTotalAmount(0);
-    setSelectedProductId(products.length > 0 ? products[0].id : '');
     setAddedItems([]);
+    setProductSearch('');
     setFormErrors({});
     setIsRegisterModalOpen(true);
   };
 
-  const handleAddProduct = () => {
-    if (!selectedProductId) return;
-
-    // Check if product is already added
-    const alreadyExists = addedItems.find(item => item.id === selectedProductId);
+  const handleSelectProduct = (product: any) => {
+    const alreadyExists = addedItems.find(item => item.id === product.id);
     if (alreadyExists) {
       alert('Este producto ya ha sido agregado a la boleta. Edite su cantidad en la tabla.');
       return;
     }
-
-    const product = products.find(p => p.id === selectedProductId);
-    if (!product) return;
 
     const newItem: BoletaItem = {
       id: product.id,
@@ -133,9 +210,10 @@ export function Boletas() {
       sku: product.sku,
       barcode: product.barcode,
       quantity: 1,
-      net_price: 0,
-      gross_price: 0,
-      total: 0
+      net_price: Math.round((product.cost_price || 0) / 1.19),
+      gross_price: product.cost_price || 0,
+      sale_price: product.sale_price || 0,
+      total: product.cost_price || 0
     };
 
     setAddedItems(prev => [...prev, newItem]);
@@ -145,13 +223,17 @@ export function Boletas() {
     setAddedItems(prev => prev.filter(item => item.id !== productId));
   };
 
-  // Update item field directly from editable table
-  const handleUpdateItemField = (productId: string, field: 'quantity' | 'net_price' | 'gross_price', value: number) => {
+  // Update item field directly from editable table with auto VAT calculations
+  const handleUpdateItemField = (productId: string, field: 'quantity' | 'net_price' | 'gross_price' | 'sale_price', value: number) => {
     setAddedItems(prev =>
       prev.map(item => {
         if (item.id === productId) {
           const updatedItem = { ...item, [field]: value };
-          // Calculate total for this item: quantity * gross_price
+          if (field === 'net_price') {
+            updatedItem.gross_price = Math.round(value * 1.19);
+          } else if (field === 'gross_price') {
+            updatedItem.net_price = Math.round(value / 1.19);
+          }
           updatedItem.total = updatedItem.quantity * updatedItem.gross_price;
           return updatedItem;
         }
@@ -165,7 +247,129 @@ export function Boletas() {
     setIsDetailModalOpen(true);
   };
 
-  const handleSaveBoleta = (e: React.FormEvent) => {
+  // Sub-modal: New Product handlers
+  const handleOpenNewProductModal = () => {
+    setNewProductData({
+      name: '',
+      category_id: categories.length > 0 ? categories[0].id : '',
+      sku: `B29-${Math.floor(1000 + Math.random() * 9000)}`,
+      barcode: `780${Date.now().toString().slice(-9)}`,
+      cost_price: 0,
+      sale_price: 0,
+      min_stock: 5
+    });
+    setIsNewProductModalOpen(true);
+  };
+
+  const handleSaveNewProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProductData.name.trim()) return alert('El nombre es obligatorio');
+    if (!newProductData.barcode.trim()) return alert('El código de barras es obligatorio');
+
+    // Check duplicate locally
+    const duplicate = products.some(p => p.name.trim().toLowerCase() === newProductData.name.trim().toLowerCase());
+    if (duplicate) {
+      alert(`Ya existe un producto con el nombre "${newProductData.name}".`);
+      return;
+    }
+
+    try {
+      const payload = {
+        name: newProductData.name.trim(),
+        category_id: newProductData.category_id || null,
+        sku: newProductData.sku.trim(),
+        barcode: newProductData.barcode.trim(),
+        cost_price: newProductData.cost_price,
+        sale_price: newProductData.sale_price,
+        stock: 0, // Starts at 0, updated on boleta save
+        min_stock: newProductData.min_stock,
+        active: true
+      };
+
+      const { data, error } = await supabase
+        .from('products')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        // Refresh local cache list
+        await fetchProducts();
+        // Auto select newly created product
+        handleSelectProduct(data);
+        setIsNewProductModalOpen(false);
+        alert('Producto creado en catálogo y agregado a la boleta.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('Error al crear producto: ' + err.message);
+    }
+  };
+
+  // Sub-modal: Edit Product handlers
+  const handleOpenEditProductModal = (item: BoletaItem) => {
+    const product = products.find(p => p.id === item.id);
+    setEditProductData({
+      id: item.id,
+      name: item.name,
+      category_id: product?.category_id || (categories.length > 0 ? categories[0].id : ''),
+      sku: item.sku || '',
+      barcode: item.barcode || '',
+      sale_price: item.sale_price,
+      min_stock: product?.min_stock || 5
+    });
+    setIsEditProductModalOpen(true);
+  };
+
+  const handleSaveEditProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editProductData.name.trim()) return alert('El nombre es obligatorio');
+    
+    try {
+      const payload = {
+        name: editProductData.name.trim(),
+        category_id: editProductData.category_id || null,
+        sku: editProductData.sku.trim(),
+        barcode: editProductData.barcode.trim(),
+        sale_price: editProductData.sale_price,
+        min_stock: editProductData.min_stock
+      };
+
+      const { error } = await supabase
+        .from('products')
+        .update(payload)
+        .eq('id', editProductData.id);
+
+      if (error) throw error;
+
+      // Update in local addedItems list too
+      setAddedItems(prev =>
+        prev.map(item => {
+          if (item.id === editProductData.id) {
+            return {
+              ...item,
+              name: editProductData.name.trim(),
+              sku: editProductData.sku.trim(),
+              barcode: editProductData.barcode.trim(),
+              sale_price: editProductData.sale_price
+            };
+          }
+          return item;
+        })
+      );
+
+      await fetchProducts(); // Sync catalog cache
+      setIsEditProductModalOpen(false);
+      alert('Producto actualizado en la base de datos.');
+    } catch (err: any) {
+      console.error(err);
+      alert('Error al actualizar producto: ' + err.message);
+    }
+  };
+
+  const handleSaveBoleta = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors: Record<string, string> = {};
 
@@ -177,7 +381,7 @@ export function Boletas() {
       errors.manualTotalAmount = 'Debe ingresar un monto total para la boleta';
     }
 
-    const negativeCheck = addedItems.some(item => item.quantity <= 0 || item.net_price < 0 || item.gross_price < 0);
+    const negativeCheck = addedItems.some(item => item.quantity <= 0 || item.net_price < 0 || item.gross_price < 0 || item.sale_price < 0);
     if (negativeCheck) {
       errors.items = 'Las cantidades deben ser mayores a 0 y los precios no pueden ser menores a 0';
     }
@@ -188,38 +392,118 @@ export function Boletas() {
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
-      // Show first error as alert
       const firstError = Object.values(errors)[0];
       alert(`Error al guardar: ${firstError}`);
       return;
     }
 
-    const newBoleta: Boleta = {
-      id: `bol-${Date.now()}`,
-      invoice_number: invoiceNumber.trim(),
-      purchase_date: purchaseDate,
-      supplier: supplier.trim(),
-      payment_method: paymentMethod,
-      amount_paid: amountPaid,
-      total_amount: totalAmount,
-      items: addedItems
-    };
+    setIsSaving(true);
+    try {
+      // 1. Insert header into boletas table in Supabase
+      const { data: boletaData, error: boletaError } = await supabase
+        .from('boletas')
+        .insert([{
+          invoice_number: invoiceNumber.trim(),
+          purchase_date: purchaseDate,
+          supplier: supplier.trim(),
+          payment_method: paymentMethod,
+          amount_paid: amountPaid,
+          total_amount: totalAmount
+        }])
+        .select()
+        .single();
 
-    // Save to local storage list
-    const updatedBoletas = [newBoleta, ...boletas];
-    localStorage.setItem('pos_boletas', JSON.stringify(updatedBoletas));
-    setBoletas(updatedBoletas);
+      if (boletaError || !boletaData) {
+        throw new Error('Error al guardar cabecera de boleta: ' + boletaError?.message);
+      }
 
-    // Close Modal and Show Success
-    setIsRegisterModalOpen(false);
-    setManualTotalAmount(0);
-    alert('Boleta registrada administrativamente con éxito.');
+      // 2. Insert items into boleta_items table in Supabase
+      if (addedItems.length > 0) {
+        const itemsToInsert = addedItems.map(item => ({
+          boleta_id: boletaData.id,
+          product_id: item.id,
+          quantity: item.quantity,
+          net_price: item.net_price,
+          gross_price: item.gross_price,
+          sale_price: item.sale_price,
+          total: item.total
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('boleta_items')
+          .insert(itemsToInsert);
+
+        if (itemsError) {
+          throw new Error('Error al guardar items de boleta: ' + itemsError.message);
+        }
+
+        // 3. Update stock and cost prices in products table
+        const userId = JSON.parse(localStorage.getItem('pos_session') || '{}').id;
+        
+        for (const item of addedItems) {
+          // Fetch current stock from Supabase to prevent overwrite race conditions
+          const { data: prodData } = await supabase
+            .from('products')
+            .select('stock')
+            .eq('id', item.id)
+            .single();
+
+          const currentStock = prodData ? prodData.stock : 0;
+          const newStock = Math.max(0, currentStock + item.quantity);
+
+          // Update stock and cost price
+          const { error: updateError } = await supabase
+            .from('products')
+            .update({
+              stock: newStock,
+              cost_price: item.gross_price,
+              sale_price: item.sale_price
+            })
+            .eq('id', item.id);
+
+          if (updateError) {
+            console.error(`Error al actualizar stock/precio del producto ${item.name}:`, updateError);
+          }
+
+          // 4. Create inventory movement record for audit trail
+          const { error: movementError } = await supabase
+            .from('inventory_movements')
+            .insert([{
+              product_id: item.id,
+              user_id: userId || null,
+              type: 'entrada',
+              quantity: item.quantity,
+              reason: `Compra Boleta N° ${invoiceNumber.trim()}`
+            }]);
+
+          if (movementError) {
+            console.error(`Error al registrar movimiento del producto ${item.name}:`, movementError);
+          }
+        }
+      }
+
+      alert('Boleta registrada con éxito en Supabase y stock actualizado.');
+      setIsRegisterModalOpen(false);
+      setManualTotalAmount(0);
+      loadBoletas();
+      fetchProducts();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Error inesperado al guardar la boleta');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  // Filter boletas by Supplier or Invoice Number
   const filteredBoletas = boletas.filter(b => 
     b.supplier.toLowerCase().includes(searchTerm.toLowerCase()) ||
     b.invoice_number.includes(searchTerm)
+  );
+
+  const filteredSearchProducts = products.filter(p =>
+    p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+    (p.barcode && p.barcode.includes(productSearch)) ||
+    (p.sku && p.sku.toLowerCase().includes(productSearch.toLowerCase()))
   );
 
   return (
@@ -227,7 +511,7 @@ export function Boletas() {
       <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-6)' }}>
         <div>
           <h1 className="text-2xl font-bold">Módulo Boletas</h1>
-          <p className="text-muted">Gestión y registro administrativo de boletas de compra de mercadería</p>
+          <p className="text-muted">Registro y visualización centralizada de boletas de compra de mercadería en Supabase</p>
         </div>
         <div>
           <Button variant="primary" onClick={handleOpenRegisterModal}>
@@ -251,46 +535,48 @@ export function Boletas() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="text-center py-8 text-muted">Cargando boletas...</div>
+            <div className="text-center py-8 text-muted">Cargando boletas desde Supabase...</div>
           ) : filteredBoletas.length === 0 ? (
-            <div className="text-center py-8 text-muted">No se registran boletas de compra.</div>
+            <div className="text-center py-8 text-muted">No se registran boletas de compra en el sistema.</div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nº Boleta</TableHead>
-                  <TableHead>Fecha Compra</TableHead>
-                  <TableHead>Proveedor</TableHead>
-                  <TableHead>Forma Pago</TableHead>
-                  <TableHead className="text-right">Monto Pagado</TableHead>
-                  <TableHead className="text-right">Total Boleta</TableHead>
-                  <TableHead className="text-center">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredBoletas.map(boleta => (
-                  <TableRow key={boleta.id}>
-                    <TableCell className="font-semibold">{boleta.invoice_number}</TableCell>
-                    <TableCell>{new Date(boleta.purchase_date + 'T12:00:00').toLocaleDateString('es-CL')}</TableCell>
-                    <TableCell>{boleta.supplier}</TableCell>
-                    <TableCell>
-                      <span className={`badge-payment ${boleta.payment_method}`}>
-                        {boleta.payment_method === 'debito' ? 'Débito' : 
-                         boleta.payment_method === 'credito' ? 'Crédito' : 
-                         boleta.payment_method === 'efectivo' ? 'Efectivo' : 'Otro'}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right font-medium">{formatCLP(boleta.amount_paid)}</TableCell>
-                    <TableCell className="text-right font-bold text-primary">{formatCLP(boleta.total_amount)}</TableCell>
-                    <TableCell className="text-center">
-                      <Button variant="ghost" size="sm" className="text-primary" onClick={() => handleOpenDetailModal(boleta)}>
-                        <Eye size={16} style={{ marginRight: '4px' }} /> Ver Detalles
-                      </Button>
-                    </TableCell>
+            <div className="items-table-container">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nº Boleta</TableHead>
+                    <TableHead>Fecha Compra</TableHead>
+                    <TableHead>Proveedor</TableHead>
+                    <TableHead>Forma Pago</TableHead>
+                    <TableHead className="text-right">Monto Pagado</TableHead>
+                    <TableHead className="text-right">Total Boleta</TableHead>
+                    <TableHead className="text-center">Acciones</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredBoletas.map(boleta => (
+                    <TableRow key={boleta.id}>
+                      <TableCell className="font-semibold">{boleta.invoice_number}</TableCell>
+                      <TableCell>{new Date(boleta.purchase_date + 'T12:00:00').toLocaleDateString('es-CL')}</TableCell>
+                      <TableCell>{boleta.supplier}</TableCell>
+                      <TableCell>
+                        <span className={`badge-payment ${boleta.payment_method}`}>
+                          {boleta.payment_method === 'debito' ? 'Débito' : 
+                           boleta.payment_method === 'credito' ? 'Crédito' : 
+                           boleta.payment_method === 'efectivo' ? 'Efectivo' : 'Otro'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">{formatCLP(boleta.amount_paid)}</TableCell>
+                      <TableCell className="text-right font-bold text-primary">{formatCLP(boleta.total_amount)}</TableCell>
+                      <TableCell className="text-center">
+                        <Button variant="ghost" size="sm" className="text-primary" onClick={() => handleOpenDetailModal(boleta)}>
+                          <Eye size={16} style={{ marginRight: '4px' }} /> Ver Detalles
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -359,75 +645,106 @@ export function Boletas() {
             )}
           </div>
 
-          {/* Product Selection Row */}
+          {/* Autocomplete Product Selection Row */}
           <div className="product-selector-wrapper">
             <h3 className="font-semibold mb-2 flex items-center gap-1 text-sm text-primary">
-              <PlusCircle size={16} /> Agregar Producto a la Boleta
+              <PlusCircle size={16} /> Buscar o Crear Producto en esta Boleta
             </h3>
             <div className="product-selector-row">
-              <div className="flex-grow min-w-[200px]" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', flex: 2 }}>
-                <label className="input-label text-xs">Seleccione Producto</label>
-                {products.length === 0 ? (
-                  <select className="input-field" disabled>
-                    <option>Cargando catálogo...</option>
-                  </select>
-                ) : (
-                  <select 
-                    className="input-field" 
-                    value={selectedProductId}
-                    onChange={e => setSelectedProductId(e.target.value)}
-                  >
-                    {products.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} {p.barcode ? `(${p.barcode})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                )}
+              <div className="relative flex-grow min-w-[200px]" style={{ flex: 2 }}>
+                <label className="input-label text-xs">Escribe para Buscar Producto</label>
+                <div className="relative">
+                  <Input
+                    placeholder="Buscar por nombre, código o SKU..."
+                    value={productSearch}
+                    onChange={e => {
+                      setProductSearch(e.target.value);
+                      setShowDropdown(true);
+                    }}
+                    onFocus={() => setShowDropdown(true)}
+                  />
+                  {showDropdown && productSearch.trim() !== '' && (
+                    <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto mt-1">
+                      {filteredSearchProducts.slice(0, 8).map(p => (
+                        <div
+                          key={p.id}
+                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex justify-between items-center text-sm border-b border-gray-50"
+                          onClick={() => {
+                            handleSelectProduct(p);
+                            setProductSearch('');
+                            setShowDropdown(false);
+                          }}
+                        >
+                          <div>
+                            <span className="font-semibold text-gray-800">{p.name}</span>
+                            <div className="text-xs text-gray-500">
+                              Código: {p.barcode || 'N/A'} {p.sku ? `| SKU: ${p.sku}` : ''}
+                            </div>
+                          </div>
+                          <span className="font-bold text-primary">{formatCLP(p.sale_price)}</span>
+                        </div>
+                      ))}
+                      {filteredSearchProducts.length === 0 && (
+                        <div className="px-4 py-3 text-gray-500 text-sm text-center">
+                          No se encontraron productos. 
+                          <button
+                            type="button"
+                            className="text-primary font-bold underline ml-1 hover:text-primary-dark"
+                            onClick={() => {
+                              handleOpenNewProductModal();
+                              setShowDropdown(false);
+                            }}
+                          >
+                            Crear nuevo producto
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-              <Button type="button" variant="outline" onClick={handleAddProduct} style={{ height: '38px' }}>
-                Añadir Ítem
-              </Button>
+              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <Button type="button" variant="outline" onClick={handleOpenNewProductModal} style={{ height: '38px' }}>
+                  <Plus size={16} style={{ marginRight: '4px' }} /> Nuevo Producto
+                </Button>
+              </div>
             </div>
           </div>
 
           {/* Added items list */}
           <div>
-            <h3 className="font-semibold mb-2 text-sm text-gray-700">Ítems Seleccionados</h3>
+            <h3 className="font-semibold mb-2 text-sm text-gray-700">Ítems de esta Boleta</h3>
             
             <div className="items-table-container">
-              <Table>
+              <Table style={{ minWidth: '750px' }}>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Producto</TableHead>
-                    <TableHead style={{ width: '100px' }}>Cantidad</TableHead>
-                    <TableHead style={{ width: '130px' }}>Precio Neto</TableHead>
-                    <TableHead style={{ width: '130px' }}>Precio Bruto</TableHead>
-                    <TableHead className="text-right" style={{ width: '120px' }}>Total</TableHead>
-                    <TableHead className="text-center" style={{ width: '60px' }}></TableHead>
+                    <TableHead style={{ width: '80px' }}>Cantidad</TableHead>
+                    <TableHead style={{ width: '120px' }}>P. Neto (Costo)</TableHead>
+                    <TableHead style={{ width: '120px' }}>P. Bruto (Costo)</TableHead>
+                    <TableHead style={{ width: '120px' }}>Precio Venta</TableHead>
+                    <TableHead className="text-right" style={{ width: '110px' }}>Total</TableHead>
+                    <TableHead className="text-center" style={{ width: '100px' }}>Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {addedItems.map(item => (
                     <TableRow key={item.id}>
                       <TableCell>
-                        <div className="font-medium text-sm">{item.name}</div>
+                        <div className="font-semibold text-sm text-gray-800">{item.name}</div>
                         {item.sku && <div className="text-xs text-muted mt-0.5">SKU: {item.sku}</div>}
+                        {item.barcode && <div className="text-xs text-muted mt-0.5">Código: {item.barcode}</div>}
                       </TableCell>
                       <TableCell>
                         <input 
                           type="number"
                           className="input-field text-center text-sm"
-                          style={{ padding: '4px', margin: 0 }}
+                          style={{ padding: '4px', margin: 0, width: '100%' }}
                           min="1"
                           required
                           value={item.quantity}
                           onWheel={e => e.currentTarget.blur()}
-                          onKeyDown={e => {
-                            if (['ArrowUp', 'ArrowDown', 'e', 'E', '+', '-', '.', ','].includes(e.key)) {
-                              e.preventDefault();
-                            }
-                          }}
                           onChange={e => handleUpdateItemField(item.id, 'quantity', e.target.value === '' ? 1 : Math.max(1, Number(e.target.value)))}
                         />
                       </TableCell>
@@ -435,16 +752,11 @@ export function Boletas() {
                         <input 
                           type="number"
                           className="input-field text-right text-sm"
-                          style={{ padding: '4px', margin: 0 }}
+                          style={{ padding: '4px', margin: 0, width: '100%' }}
                           min="0"
                           required
                           value={item.net_price}
                           onWheel={e => e.currentTarget.blur()}
-                          onKeyDown={e => {
-                            if (['ArrowUp', 'ArrowDown', 'e', 'E', '+', '-'].includes(e.key)) {
-                              e.preventDefault();
-                            }
-                          }}
                           onChange={e => handleUpdateItemField(item.id, 'net_price', e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)))}
                         />
                       </TableCell>
@@ -452,33 +764,45 @@ export function Boletas() {
                         <input 
                           type="number"
                           className="input-field text-right text-sm"
-                          style={{ padding: '4px', margin: 0 }}
+                          style={{ padding: '4px', margin: 0, width: '100%' }}
                           min="0"
                           required
                           value={item.gross_price}
                           onWheel={e => e.currentTarget.blur()}
-                          onKeyDown={e => {
-                            if (['ArrowUp', 'ArrowDown', 'e', 'E', '+', '-'].includes(e.key)) {
-                              e.preventDefault();
-                            }
-                          }}
                           onChange={e => handleUpdateItemField(item.id, 'gross_price', e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)))}
                         />
                       </TableCell>
-                      <TableCell className="text-right font-semibold text-sm">
+                      <TableCell>
+                        <input 
+                          type="number"
+                          className="input-field text-right text-sm font-semibold text-primary"
+                          style={{ padding: '4px', margin: 0, width: '100%' }}
+                          min="0"
+                          required
+                          value={item.sale_price}
+                          onWheel={e => e.currentTarget.blur()}
+                          onChange={e => handleUpdateItemField(item.id, 'sale_price', e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)))}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-sm text-gray-800">
                         {formatCLP(item.total)}
                       </TableCell>
                       <TableCell className="text-center">
-                        <Button type="button" variant="ghost" size="sm" className="text-danger" onClick={() => handleRemoveItem(item.id)}>
-                          <Trash2 size={16} />
-                        </Button>
+                        <div className="flex justify-center gap-1">
+                          <Button type="button" variant="ghost" size="sm" className="text-primary" onClick={() => handleOpenEditProductModal(item)} title="Editar información del producto en catálogo">
+                            <Edit2 size={16} />
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" className="text-danger" onClick={() => handleRemoveItem(item.id)} title="Remover de la boleta">
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
                   {addedItems.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-6 text-muted text-sm">
-                        No se han añadido productos a la boleta. Utilice el selector superior.
+                      <TableCell colSpan={7} className="text-center py-6 text-muted text-sm">
+                        No se han añadido productos a la boleta. Utilice el buscador superior.
                       </TableCell>
                     </TableRow>
                   )}
@@ -495,8 +819,8 @@ export function Boletas() {
             <Button variant="outline" type="button" onClick={() => setIsRegisterModalOpen(false)}>
               Cancelar
             </Button>
-            <Button variant="primary" type="submit">
-              Guardar Boleta
+            <Button variant="primary" type="submit" disabled={isSaving}>
+              {isSaving ? 'Guardando...' : 'Guardar Boleta'}
             </Button>
           </div>
         </form>
@@ -549,13 +873,14 @@ export function Boletas() {
                       <TableHead className="text-center" style={{ width: '80px' }}>Cant.</TableHead>
                       <TableHead className="text-right" style={{ width: '110px' }}>P. Neto</TableHead>
                       <TableHead className="text-right" style={{ width: '110px' }}>P. Bruto</TableHead>
+                      <TableHead className="text-right" style={{ width: '110px' }}>P. Venta</TableHead>
                       <TableHead className="text-right" style={{ width: '120px' }}>Total</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {selectedBoleta.items.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={5} className="text-center py-6 text-muted text-sm">
+                        <TableCell colSpan={6} className="text-center py-6 text-muted text-sm">
                           Esta boleta no tiene productos registrados.
                         </TableCell>
                       </TableRow>
@@ -563,12 +888,14 @@ export function Boletas() {
                       selectedBoleta.items.map(item => (
                         <TableRow key={item.id}>
                           <TableCell>
-                            <div className="font-medium text-sm">{item.name}</div>
+                            <div className="font-semibold text-sm">{item.name}</div>
                             {item.sku && <div className="text-xs text-muted">SKU: {item.sku}</div>}
+                            {item.barcode && <div className="text-xs text-muted">Código: {item.barcode}</div>}
                           </TableCell>
-                          <TableCell className="text-center">{item.quantity}</TableCell>
+                          <TableCell className="text-center font-medium">{item.quantity}</TableCell>
                           <TableCell className="text-right">{formatCLP(item.net_price)}</TableCell>
                           <TableCell className="text-right font-medium">{formatCLP(item.gross_price)}</TableCell>
+                          <TableCell className="text-right font-medium text-primary">{formatCLP(item.sale_price)}</TableCell>
                           <TableCell className="text-right font-bold text-primary">{formatCLP(item.total)}</TableCell>
                         </TableRow>
                       ))
@@ -585,6 +912,147 @@ export function Boletas() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Sub-Modal: Crear Nuevo Producto desde Boleta */}
+      <Modal isOpen={isNewProductModalOpen} onClose={() => setIsNewProductModalOpen(false)} title="Crear Producto Nuevo en Catálogo" width="sm">
+        <form onSubmit={handleSaveNewProduct} className="flex-col gap-4">
+          <Input 
+            label="Nombre del Producto" 
+            required 
+            value={newProductData.name} 
+            onChange={e => setNewProductData({...newProductData, name: e.target.value})} 
+            fullWidth 
+          />
+          
+          <div className="input-group w-full">
+            <label className="input-label">Categoría</label>
+            <select 
+              className="input-field" 
+              value={newProductData.category_id} 
+              onChange={e => setNewProductData({...newProductData, category_id: e.target.value})}
+              required
+            >
+              <option value="" disabled>Seleccione una categoría</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-4">
+            <Input 
+              label="SKU (Opcional)" 
+              value={newProductData.sku} 
+              onChange={e => setNewProductData({...newProductData, sku: e.target.value})} 
+              fullWidth 
+            />
+            <Input 
+              label="Código de Barras" 
+              required 
+              value={newProductData.barcode} 
+              onChange={e => setNewProductData({...newProductData, barcode: e.target.value})} 
+              fullWidth 
+            />
+          </div>
+
+          <div className="flex gap-4">
+            <CurrencyInput 
+              label="Precio Costo Defecto" 
+              value={newProductData.cost_price} 
+              onChange={val => setNewProductData({...newProductData, cost_price: val})} 
+              fullWidth 
+            />
+            <CurrencyInput 
+              label="Precio Venta Defecto" 
+              required 
+              value={newProductData.sale_price} 
+              onChange={val => setNewProductData({...newProductData, sale_price: val})} 
+              fullWidth 
+            />
+          </div>
+
+          <Input 
+            label="Stock Mínimo (Alerta)" 
+            type="number" 
+            required 
+            value={newProductData.min_stock} 
+            onChange={e => setNewProductData({...newProductData, min_stock: Math.max(0, Number(e.target.value))})} 
+            fullWidth 
+          />
+
+          <div className="flex justify-end gap-2 mt-4" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)' }}>
+            <Button variant="outline" type="button" onClick={() => setIsNewProductModalOpen(false)}>Cancelar</Button>
+            <Button variant="primary" type="submit">Crear Producto</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Sub-Modal: Editar Producto desde Boleta */}
+      <Modal isOpen={isEditProductModalOpen} onClose={() => setIsEditProductModalOpen(false)} title="Editar Producto en Catálogo" width="sm">
+        <form onSubmit={handleSaveEditProduct} className="flex-col gap-4">
+          <Input 
+            label="Nombre del Producto" 
+            required 
+            value={editProductData.name} 
+            onChange={e => setEditProductData({...editProductData, name: e.target.value})} 
+            fullWidth 
+          />
+          
+          <div className="input-group w-full">
+            <label className="input-label">Categoría</label>
+            <select 
+              className="input-field" 
+              value={editProductData.category_id} 
+              onChange={e => setEditProductData({...editProductData, category_id: e.target.value})}
+              required
+            >
+              <option value="" disabled>Seleccione una categoría</option>
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-4">
+            <Input 
+              label="SKU (Opcional)" 
+              value={editProductData.sku} 
+              onChange={e => setEditProductData({...editProductData, sku: e.target.value})} 
+              fullWidth 
+            />
+            <Input 
+              label="Código de Barras" 
+              required 
+              value={editProductData.barcode} 
+              onChange={e => setEditProductData({...editProductData, barcode: e.target.value})} 
+              fullWidth 
+            />
+          </div>
+
+          <div className="flex gap-4">
+            <CurrencyInput 
+              label="Precio de Venta" 
+              required 
+              value={editProductData.sale_price} 
+              onChange={val => setEditProductData({...editProductData, sale_price: val})} 
+              fullWidth 
+            />
+            <Input 
+              label="Stock Mínimo" 
+              type="number" 
+              required 
+              value={editProductData.min_stock} 
+              onChange={e => setEditProductData({...editProductData, min_stock: Math.max(0, Number(e.target.value))})} 
+              fullWidth 
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)' }}>
+            <Button variant="outline" type="button" onClick={() => setIsEditProductModalOpen(false)}>Cancelar</Button>
+            <Button variant="primary" type="submit">Actualizar Producto</Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

@@ -10,6 +10,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Ventas } from './pages/Ventas';
 import { Inventario } from './pages/Inventario';
 import { Boletas } from './pages/Boletas';
+import { HistorialPrecios } from './pages/HistorialPrecios';
 import { Caja } from './pages/Caja';
 import { Reportes } from './pages/Reportes';
 import { Usuarios } from './pages/Usuarios';
@@ -94,25 +95,31 @@ function App() {
   useEffect(() => {
     if (!user) return;
 
-    let timeoutId: ReturnType<typeof setTimeout>;
+    localStorage.setItem('pos_last_activity', Date.now().toString());
 
-    const resetTimer = () => {
-      clearTimeout(timeoutId);
-      // 1 hora de inactividad = 3600000 ms
-      timeoutId = setTimeout(() => {
-        logout();
-        alert('Tu sesión se ha cerrado automáticamente por inactividad (1 hora).');
-      }, 3600000);
+    const updateActivity = () => {
+      localStorage.setItem('pos_last_activity', Date.now().toString());
     };
 
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
-    events.forEach(event => document.addEventListener(event, resetTimer, { passive: true }));
+    events.forEach(event => document.addEventListener(event, updateActivity, { passive: true }));
 
-    resetTimer();
+    const checkInterval = setInterval(() => {
+      const lastActivity = localStorage.getItem('pos_last_activity');
+      if (lastActivity) {
+        const inactiveTime = Date.now() - Number(lastActivity);
+        if (inactiveTime > 3600000) {
+          logout();
+          alert('Tu sesión se ha cerrado automáticamente por inactividad (1 hora).');
+        }
+      } else {
+        logout();
+      }
+    }, 10000);
 
     return () => {
-      clearTimeout(timeoutId);
-      events.forEach(event => document.removeEventListener(event, resetTimer));
+      clearInterval(checkInterval);
+      events.forEach(event => document.removeEventListener(event, updateActivity));
     };
   }, [user, logout]);
 
@@ -140,6 +147,11 @@ function App() {
           <Route path="boletas" element={
             <ProtectedRoute requiredPermission="can_inventory">
               <Boletas />
+            </ProtectedRoute>
+          } />
+          <Route path="historial-precios" element={
+            <ProtectedRoute requiredPermission="can_inventory">
+              <HistorialPrecios />
             </ProtectedRoute>
           } />
           <Route path="caja" element={

@@ -59,6 +59,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       };
 
       localStorage.setItem('pos_session', JSON.stringify(user));
+      localStorage.setItem('pos_last_activity', Date.now().toString());
       set({ user, isLoading: false });
       return { success: true };
     } catch (err) {
@@ -69,18 +70,30 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: () => {
     localStorage.removeItem('pos_session');
+    localStorage.removeItem('pos_last_activity');
     set({ user: null });
   },
 
   checkSession: () => {
     const stored = localStorage.getItem('pos_session');
-    if (stored) {
-      try {
-        set({ user: JSON.parse(stored), isLoading: false });
-      } catch {
+    const lastActivity = localStorage.getItem('pos_last_activity');
+    if (stored && lastActivity) {
+      const isExpired = Date.now() - Number(lastActivity) > 3600000;
+      if (isExpired) {
+        localStorage.removeItem('pos_session');
+        localStorage.removeItem('pos_last_activity');
         set({ user: null, isLoading: false });
+      } else {
+        try {
+          localStorage.setItem('pos_last_activity', Date.now().toString());
+          set({ user: JSON.parse(stored), isLoading: false });
+        } catch {
+          set({ user: null, isLoading: false });
+        }
       }
     } else {
+      localStorage.removeItem('pos_session');
+      localStorage.removeItem('pos_last_activity');
       set({ user: null, isLoading: false });
     }
   }

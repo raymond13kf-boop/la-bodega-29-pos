@@ -118,3 +118,39 @@
   background-color: rgba(107, 114, 128, 0.1);
   color: #71717a;
 }
+
+/* Responsive adjustments for Boletas */
+@media (max-width: 768px) {
+  .product-selector-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .product-selector-row > div {
+    width: 100%;
+  }
+
+  .product-selector-row button {
+    width: 100%;
+    margin-top: var(--space-2);
+  }
+
+  .items-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .items-table-container table {
+    min-width: 750px; /* Force table horizontal scrolling instead of squeezing columns */
+  }
+
+  .modal-content {
+    padding: var(--space-4) !important;
+  }
+
+  /* Force grids to single column on mobile */
+  .grid-cols-3, .grid-cols-2 {
+    grid-template-columns: 1fr !important;
+  }
+}
+

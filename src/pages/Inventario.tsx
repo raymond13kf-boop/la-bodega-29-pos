@@ -1,43 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { CurrencyInput } from '../components/ui/CurrencyInput';
-import { Modal } from '../components/ui/Modal';
-import { Plus, Search, Edit2, Trash2, Download } from 'lucide-react';
+import { Search, Download } from 'lucide-react';
 import { type Product } from '../store/posStore';
-import { useAuthStore } from '../store/authStore';
 import * as XLSX from 'xlsx';
 
 const formatCLP = (amount: number) => {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
 };
 
-const generateSKU = () => `B29-${Math.floor(1000 + Math.random() * 9000)}`;
-const generateBarcode = () => `780${Date.now().toString().slice(-9)}`;
-
 export function Inventario() {
-  const { user } = useAuthStore();
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  
-  // Modal states
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  
-  // Form errors state
-  const [formErrors, setFormErrors] = useState<{ stock?: string; min_stock?: string }>({});
-
-  // Form states
-  const [formData, setFormData] = useState<{
-    name: string; sku: string; barcode: string; sale_price: number; cost_price: number; stock: number | ''; min_stock: number | ''; category_id: string;
-  }>({
-    name: '', sku: '', barcode: '', sale_price: 0, cost_price: 0, stock: '', min_stock: 5, category_id: ''
-  });
 
   useEffect(() => {
     fetchData();
@@ -45,140 +23,20 @@ export function Inventario() {
 
   const fetchData = async () => {
     setIsLoading(true);
-    
-    // Fetch categories
-    const { data: catData } = await supabase.from('categories').select('*').order('name');
-    if (catData) setCategories(catData);
-
-    // Fetch products with category names
-    const { data: prodData, error } = await supabase
-      .from('products')
-      .select('*, categories(name)')
-      .eq('active', true)
-      .order('name');
-      
-    if (!error && prodData) {
-      setProducts(prodData);
-    }
-    setIsLoading(false);
-  };
-
-  const handleOpenModal = (product?: Product) => {
-    setFormErrors({});
-    if (product) {
-      setEditingProduct(product);
-      setFormData({
-        name: product.name, sku: product.sku || '', barcode: product.barcode || '', 
-        sale_price: product.sale_price, cost_price: product.cost_price || 0, 
-        stock: product.stock, min_stock: (product as any).min_stock || 5,
-        category_id: product.category_id || ''
-      });
-    } else {
-      setEditingProduct(null);
-      setFormData({ 
-        name: '', 
-        sku: generateSKU(), 
-        barcode: generateBarcode(), 
-        sale_price: 0, 
-        cost_price: 0, 
-        stock: '', 
-        min_stock: 5,
-        category_id: categories.length > 0 ? categories[0].id : ''
-      });
-    }
-    setIsModalOpen(true);
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (formErrors.stock || formErrors.min_stock) {
-      alert('Error: Por favor, corrija los errores de validación antes de guardar el producto.');
-      return;
-    }
-    
-    const requestedStock = formData.stock === '' ? 0 : Number(formData.stock);
-    if (requestedStock < 0) {
-      alert('Error: El stock no puede ser menor a 0. Por favor, ingrese un valor de stock válido.');
-      console.warn('Intento de guardar stock negativo abortado:', formData.name, formData.stock);
-      return;
-    }
-
-    const requestedMinStock = formData.min_stock === '' ? 5 : Number(formData.min_stock);
-    if (requestedMinStock < 0) {
-      alert('Error: El stock mínimo no puede ser menor a 0.');
-      return;
-    }
-
-    const payload = {
-      ...formData,
-      stock: requestedStock,
-      min_stock: requestedMinStock,
-      category_id: formData.category_id || null
-    };
-
-    const normalizedName = formData.name.trim().toLowerCase();
-    const isDuplicate = products.some(p => 
-      p.id !== editingProduct?.id && 
-      p.name.trim().toLowerCase() === normalizedName
-    );
-
-    if (isDuplicate) {
-      alert(`Error: Ya existe un producto con el nombre "${formData.name}". Modifícalo para evitar confusiones en el sistema.`);
-      return;
-    }
-
-    if (editingProduct) {
-      const { error } = await supabase
+    try {
+      const { data: prodData, error } = await supabase
         .from('products')
-        .update(payload)
-        .eq('id', editingProduct.id);
-      if (!error) {
-        // Registrar movimiento si el stock cambió
-        const oldStock = editingProduct.stock;
-        const diff = requestedStock - oldStock;
-        if (diff !== 0) {
-          await supabase.from('inventory_movements').insert([{
-            product_id: editingProduct.id,
-            user_id: user?.id || null,
-            type: diff > 0 ? 'entrada' : 'salida',
-            quantity: Math.abs(diff),
-            reason: diff > 0 ? 'Ingreso de stock' : 'Salida de stock'
-          }]);
-        }
-        setIsModalOpen(false);
-        fetchData();
-      } else {
-        alert('Error actualizando producto');
+        .select('*, categories(name)')
+        .eq('active', true)
+        .order('name');
+        
+      if (!error && prodData) {
+        setProducts(prodData);
       }
-    } else {
-      const { data: insertedData, error } = await supabase
-        .from('products')
-        .insert([payload])
-        .select();
-      if (!error) {
-        // Registrar movimiento si el stock inicial es mayor a 0
-        if (requestedStock > 0 && insertedData && insertedData.length > 0) {
-          await supabase.from('inventory_movements').insert([{
-            product_id: insertedData[0].id,
-            user_id: user?.id || null,
-            type: 'entrada',
-            quantity: requestedStock,
-            reason: 'Ingreso inicial de stock'
-          }]);
-        }
-        setIsModalOpen(false);
-        fetchData();
-      } else {
-        alert('Error creando producto. Asegúrate que el SKU/Código no estén repetidos.');
-      }
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (confirm('¿Estás seguro de eliminar este producto? (Se marcará como inactivo)')) {
-      await supabase.from('products').update({ active: false }).eq('id', id);
-      fetchData();
+    } catch (e) {
+      console.error('Error al obtener productos:', e);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -190,7 +48,6 @@ export function Inventario() {
   );
 
   const handleExportExcel = () => {
-    // Definir el conjunto de datos mapeado exactamente con los datos de pantalla
     const dataToExport = filteredProducts.map(product => {
       const costo = product.cost_price || 0;
       const venta = product.sale_price;
@@ -212,14 +69,10 @@ export function Inventario() {
       };
     });
 
-    // Crear hoja de trabajo
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-    
-    // Crear libro de trabajo
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventario');
 
-    // Descargar archivo Excel con la fecha actual local
     const todayLocal = new Date();
     const dateStr = `${todayLocal.getFullYear()}-${String(todayLocal.getMonth() + 1).padStart(2, '0')}-${String(todayLocal.getDate()).padStart(2, '0')}`;
     XLSX.writeFile(workbook, `Inventario_${dateStr}.xlsx`);
@@ -230,16 +83,12 @@ export function Inventario() {
       <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-6)' }}>
         <div>
           <h1 className="text-2xl font-bold">Inventario</h1>
-          <p className="text-muted">Gestiona tus productos, categorías y utilidades</p>
+          <p className="text-muted">Visualiza tus productos, categorías y utilidades (Solo Consulta)</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={handleExportExcel}>
             <Download size={18} />
             Exportar a Excel
-          </Button>
-          <Button variant="primary" onClick={() => handleOpenModal()}>
-            <Plus size={18} />
-            Nuevo Producto
           </Button>
         </div>
       </div>
@@ -270,7 +119,6 @@ export function Inventario() {
                   <TableHead>Margen</TableHead>
                   <TableHead>Stock</TableHead>
                   <TableHead>Utilidad Est.</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -285,7 +133,7 @@ export function Inventario() {
                     <TableRow key={product.id}>
                       <TableCell>
                         <div className="font-medium">{product.name}</div>
-                        <div className="text-xs text-muted mt-1">{product.barcode}</div>
+                        <div className="text-xs text-muted mt-1">SKU: {product.sku || 'N/A'} | Código: {product.barcode || 'N/A'}</div>
                       </TableCell>
                       <TableCell>
                         <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
@@ -304,22 +152,12 @@ export function Inventario() {
                         </span>
                       </TableCell>
                       <TableCell className="text-info font-medium">{formatCLP(utilidad)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm" className="text-primary" onClick={() => handleOpenModal(product)}>
-                            <Edit2 size={16} />
-                          </Button>
-                          <Button variant="ghost" size="sm" className="text-danger" onClick={() => handleDelete(product.id)}>
-                            <Trash2 size={16} />
-                          </Button>
-                        </div>
-                      </TableCell>
                     </TableRow>
                   );
                 })}
                 {filteredProducts.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted">
                       No se encontraron productos.
                     </TableCell>
                   </TableRow>
@@ -329,92 +167,6 @@ export function Inventario() {
           )}
         </CardContent>
       </Card>
-
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingProduct ? 'Editar Producto' : 'Nuevo Producto'}>
-        <form onSubmit={handleSave} className="flex-col gap-4">
-          <Input label="Nombre del Producto" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} fullWidth />
-          
-          <div className="input-group w-full">
-            <label className="input-label">Categoría</label>
-            <select 
-              className="input-field" 
-              value={formData.category_id} 
-              onChange={e => setFormData({...formData, category_id: e.target.value})}
-              required
-            >
-              <option value="" disabled>Seleccione una categoría</option>
-              {categories.map(cat => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex gap-4">
-            <Input label="SKU (Opcional)" value={formData.sku} onChange={e => setFormData({...formData, sku: e.target.value})} fullWidth />
-            <Input label="Código de Barras" required value={formData.barcode} onChange={e => setFormData({...formData, barcode: e.target.value})} fullWidth />
-          </div>
-          <div className="flex gap-4">
-            <CurrencyInput label="Precio de Costo" required value={formData.cost_price} onChange={val => setFormData({...formData, cost_price: val})} fullWidth />
-            <CurrencyInput label="Precio de Venta" required value={formData.sale_price} onChange={val => setFormData({...formData, sale_price: val})} fullWidth />
-          </div>
-          <div className="flex gap-4">
-            <Input 
-              label="Stock Actual" 
-              type="number" 
-              required 
-              value={formData.stock} 
-              error={formErrors.stock}
-              onWheel={e => e.currentTarget.blur()}
-              onKeyDown={e => {
-                if (['ArrowUp', 'ArrowDown', 'e', 'E', '+', '-', '.', ','].includes(e.key)) {
-                  e.preventDefault();
-                }
-              }}
-              onChange={e => {
-                const val = e.target.value;
-                let errorMsg = '';
-                if (val === '') {
-                  errorMsg = 'El stock actual es obligatorio';
-                } else if (Number(val) < 0) {
-                  errorMsg = 'El stock no puede ser menor a 0';
-                }
-                setFormErrors(prev => ({ ...prev, stock: errorMsg }));
-                setFormData(prev => ({ ...prev, stock: val === '' ? '' : Number(val) }));
-              }}
-              fullWidth 
-            />
-            <Input 
-              label="Stock Mínimo (Alerta)" 
-              type="number" 
-              required 
-              value={formData.min_stock} 
-              error={formErrors.min_stock}
-              onWheel={e => e.currentTarget.blur()}
-              onKeyDown={e => {
-                if (['ArrowUp', 'ArrowDown', 'e', 'E', '+', '-', '.', ','].includes(e.key)) {
-                  e.preventDefault();
-                }
-              }}
-              onChange={e => {
-                const val = e.target.value;
-                let errorMsg = '';
-                if (val === '') {
-                  errorMsg = 'El stock mínimo es obligatorio';
-                } else if (Number(val) < 0) {
-                  errorMsg = 'El stock mínimo no puede ser menor a 0';
-                }
-                setFormErrors(prev => ({ ...prev, min_stock: errorMsg }));
-                setFormData(prev => ({ ...prev, min_stock: val === '' ? '' : Number(val) }));
-              }}
-              fullWidth 
-            />
-          </div>
-          <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" type="button" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-            <Button variant="primary" type="submit">Guardar Producto</Button>
-          </div>
-        </form>
-      </Modal>
     </div>
   );
 }

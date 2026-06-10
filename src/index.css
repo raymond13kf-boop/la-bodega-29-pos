@@ -126,3 +126,40 @@ input, textarea, select {
 .text-muted { color: var(--color-text-muted); }
 .text-danger { color: var(--color-danger); }
 .text-success { color: var(--color-success); }
+
+/* Autocomplete Dropdown and Item Utilities */
+.autocomplete-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--border-radius-md, 8px);
+  box-shadow: var(--shadow-lg);
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 999 !important;
+  margin-top: 4px;
+}
+
+.autocomplete-item {
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-sm);
+  border-bottom: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  transition: background-color 0.2s;
+}
+
+.autocomplete-item:hover {
+  background-color: var(--color-background);
+}
+
+.autocomplete-item:last-child {
+  border-bottom: none;
+}

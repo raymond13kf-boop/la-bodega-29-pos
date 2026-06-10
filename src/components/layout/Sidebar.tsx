@@ -21,7 +21,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     { path: '/ventas', icon: <ShoppingCart size={20} />, label: 'Ventas (POS)', show: perms?.can_sell },
     { path: '/caja', icon: <Inbox size={20} />, label: 'Caja', show: perms?.can_manage_cash },
     { path: '/inventario', icon: <Package size={20} />, label: 'Inventario', show: perms?.can_inventory },
-    { path: '/boletas', icon: <Receipt size={20} />, label: 'Boletas', show: perms?.can_inventory },
+    { path: '/boletas', icon: <Receipt size={20} />, label: 'Facturas/Boletas', show: perms?.can_inventory },
     { path: '/historial-precios', icon: <TrendingUp size={20} />, label: 'Historial Precios', show: perms?.can_inventory },
     { path: '/reportes', icon: <FileText size={20} />, label: 'Reportes', show: perms?.can_view_reports },
     { path: '/usuarios', icon: <Users size={20} />, label: 'Usuarios', show: perms?.can_manage_users },

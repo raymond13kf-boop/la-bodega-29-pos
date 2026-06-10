@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
@@ -47,6 +47,18 @@ export function Boletas() {
   // Autocomplete Search State
   const [productSearch, setProductSearch] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Modal State
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -620,13 +632,13 @@ export function Boletas() {
     <div className="boletas-container flex-col gap-4">
       <div className="flex justify-between items-center" style={{ marginBottom: 'var(--space-6)' }}>
         <div>
-          <h1 className="text-2xl font-bold">Módulo Boletas</h1>
-          <p className="text-muted">Registro y visualización centralizada de boletas de compra de mercadería en Supabase</p>
+          <h1 className="text-2xl font-bold">Módulo Facturas/Boletas</h1>
+          <p className="text-muted">Registro y visualización centralizada de facturas y boletas de compra en Supabase</p>
         </div>
         <div>
           <Button variant="primary" onClick={handleOpenRegisterModal}>
             <Plus size={18} />
-            Registrar Boleta
+            Registrar Factura/Boleta
           </Button>
         </div>
       </div>
@@ -635,7 +647,7 @@ export function Boletas() {
         <CardHeader>
           <div className="w-full" style={{ maxWidth: '400px' }}>
             <Input 
-              placeholder="Buscar por proveedor o número de boleta..." 
+              placeholder="Buscar por proveedor o número de factura/boleta..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               icon={<Search size={18} />}
@@ -647,13 +659,13 @@ export function Boletas() {
           {isLoading ? (
             <div className="text-center py-8 text-muted">Cargando boletas desde Supabase...</div>
           ) : filteredBoletas.length === 0 ? (
-            <div className="text-center py-8 text-muted">No se registran boletas de compra en el sistema.</div>
+            <div className="text-center py-8 text-muted">No se registran facturas ni boletas de compra en el sistema.</div>
           ) : (
             <div className="items-table-container">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nº Boleta</TableHead>
+                    <TableHead>Nº Factura/Boleta</TableHead>
                     <TableHead>Fecha Compra</TableHead>
                     <TableHead>Proveedor</TableHead>
                     <TableHead>Forma Pago</TableHead>
@@ -693,11 +705,11 @@ export function Boletas() {
       </Card>
 
       {/* Modal - Registrar Boleta */}
-      <Modal isOpen={isRegisterModalOpen} onClose={() => setIsRegisterModalOpen(false)} title="Registrar Boleta de Compra" width="lg">
+      <Modal isOpen={isRegisterModalOpen} onClose={() => setIsRegisterModalOpen(false)} title="Registrar Factura/Boleta de Compra" width="lg">
         <form onSubmit={handleSaveBoleta} className="flex-col gap-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4" style={{ marginBottom: 'var(--space-2)' }}>
             <Input 
-              label="Número de Boleta" 
+              label="Número de Factura/Boleta" 
               required 
               value={invoiceNumber} 
               onChange={e => setInvoiceNumber(e.target.value)} 
@@ -748,7 +760,7 @@ export function Boletas() {
             />
             {addedItems.length === 0 && (
               <CurrencyInput 
-                label="Monto Total de Boleta" 
+                label="Monto Total Factura/Boleta" 
                 required 
                 value={manualTotalAmount} 
                 onChange={val => setManualTotalAmount(val)} 
@@ -760,10 +772,10 @@ export function Boletas() {
           {/* Autocomplete Product Selection Row */}
           <div className="product-selector-wrapper">
             <h3 className="font-semibold mb-2 flex items-center gap-1 text-sm text-primary">
-              <PlusCircle size={16} /> Buscar o Crear Producto en esta Boleta
+              <PlusCircle size={16} /> Buscar o Crear Producto en esta Factura/Boleta
             </h3>
             <div className="product-selector-row">
-              <div className="relative flex-grow min-w-[200px]" style={{ flex: 2 }}>
+              <div className="relative flex-grow min-w-[200px] search-container" ref={dropdownRef} style={{ flex: 2 }}>
                 <label className="input-label text-xs">Escribe para Buscar Producto</label>
                 <div className="relative">
                   <Input
@@ -776,11 +788,11 @@ export function Boletas() {
                     onFocus={() => setShowDropdown(true)}
                   />
                   {showDropdown && productSearch.trim() !== '' && (
-                    <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto mt-1">
+                    <div className="autocomplete-dropdown">
                       {filteredSearchProducts.slice(0, 8).map(p => (
                         <div
                           key={p.id}
-                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer flex justify-between items-center text-sm border-b border-gray-50"
+                          className="autocomplete-item"
                           onClick={() => {
                             handleSelectProduct(p);
                             setProductSearch('');
@@ -921,7 +933,7 @@ export function Boletas() {
                 </TableBody>
               </Table>
               <div className="items-table-footer">
-                <span>Total General de la Boleta:</span>
+                <span>Total General Factura/Boleta:</span>
                 <span className="items-table-footer-val">{formatCLP(totalAmount)}</span>
               </div>
             </div>
@@ -939,12 +951,12 @@ export function Boletas() {
       </Modal>
 
       {/* Modal - Ver Detalles Boleta */}
-      <Modal isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} title="Detalles de Boleta de Compra" width="md">
+      <Modal isOpen={isDetailModalOpen} onClose={() => setIsDetailModalOpen(false)} title="Detalles de Factura/Boleta de Compra" width="md">
         {selectedBoleta && (
           <div className="boleta-detail-modal">
             <div className="boleta-detail-grid">
               <div className="boleta-detail-item">
-                <span className="boleta-detail-label">Número de Boleta</span>
+                <span className="boleta-detail-label">Número de Factura/Boleta</span>
                 <span className="boleta-detail-value font-bold text-primary">{selectedBoleta.invoice_number}</span>
               </div>
               <div className="boleta-detail-item">
@@ -994,7 +1006,7 @@ export function Boletas() {
                     {selectedBoleta.items.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} className="text-center py-6 text-muted text-sm">
-                          Esta boleta no tiene productos registrados.
+                          Esta factura/boleta no tiene productos registrados.
                         </TableCell>
                       </TableRow>
                     ) : (

@@ -101,6 +101,116 @@ export function Boletas() {
     loadBoletas();
   }, []);
 
+  // Migrar boletas locales de localStorage a Supabase para no perder historial previo
+  useEffect(() => {
+    if (products.length === 0) return;
+
+    const migrateLocalBoletas = async () => {
+      const stored = localStorage.getItem('pos_boletas');
+      if (!stored) return;
+
+      try {
+        const localBoletas = JSON.parse(stored) as Boleta[];
+        if (localBoletas.length === 0) return;
+
+        console.log(`Iniciando migración de ${localBoletas.length} boletas locales a Supabase...`);
+
+        for (const boleta of localBoletas) {
+          // 1. Insertar cabecera de la boleta
+          const { data: insertedBoleta, error: headerError } = await supabase
+            .from('boletas')
+            .insert([{
+              invoice_number: boleta.invoice_number,
+              purchase_date: boleta.purchase_date,
+              supplier: boleta.supplier,
+              payment_method: boleta.payment_method,
+              amount_paid: boleta.amount_paid,
+              total_amount: boleta.total_amount
+            }])
+            .select()
+            .single();
+
+          if (headerError || !insertedBoleta) {
+            console.error('Error migrando cabecera de boleta:', boleta.invoice_number, headerError);
+            continue;
+          }
+
+          // 2. Insertar ítems asociados
+          if (boleta.items && boleta.items.length > 0) {
+            const itemsToInsert = [];
+            for (const item of boleta.items) {
+              // Buscar producto existente por id, barcode o nombre
+              let dbProduct = products.find(p => 
+                p.id === item.id || 
+                (item.barcode && p.barcode === item.barcode) || 
+                p.name.trim().toLowerCase() === item.name.trim().toLowerCase()
+              );
+
+              // Si el producto no existe en Supabase, lo creamos para cumplir FK
+              if (!dbProduct) {
+                try {
+                  const { data: newProd, error: prodError } = await supabase
+                    .from('products')
+                    .insert([{
+                      name: item.name,
+                      sku: item.sku || `B29-${Math.floor(1000 + Math.random() * 9000)}`,
+                      barcode: item.barcode || `780${Date.now().toString().slice(-9)}`,
+                      cost_price: item.gross_price,
+                      sale_price: item.sale_price || Math.round(item.gross_price * 1.3),
+                      stock: 0,
+                      min_stock: 5,
+                      active: true
+                    }])
+                    .select()
+                    .single();
+
+                  if (!prodError && newProd) {
+                    dbProduct = newProd;
+                    setProducts(prev => [...prev, newProd]);
+                  }
+                } catch (pe) {
+                  console.error('Error auto-creando producto durante migración:', pe);
+                }
+              }
+
+              if (dbProduct) {
+                itemsToInsert.push({
+                  boleta_id: insertedBoleta.id,
+                  product_id: dbProduct.id,
+                  quantity: item.quantity,
+                  net_price: item.net_price,
+                  gross_price: item.gross_price,
+                  sale_price: item.sale_price || dbProduct.sale_price || 0,
+                  total: item.total
+                });
+              }
+            }
+
+            if (itemsToInsert.length > 0) {
+              const { error: itemsError } = await supabase
+                .from('boleta_items')
+                .insert(itemsToInsert);
+
+              if (itemsError) {
+                console.error('Error migrando items de boleta:', boleta.invoice_number, itemsError);
+              }
+            }
+          }
+        }
+
+        // Respaldar antes de eliminar
+        localStorage.setItem('pos_boletas_migrated_backup', stored);
+        localStorage.removeItem('pos_boletas');
+        console.log('Migración de boletas completada con éxito.');
+        loadBoletas();
+      } catch (err) {
+        console.error('Excepción en migración de boletas:', err);
+      }
+    };
+
+    migrateLocalBoletas();
+  }, [products]);
+
   // Fetch active products from Supabase
   const fetchProducts = async () => {
     try {

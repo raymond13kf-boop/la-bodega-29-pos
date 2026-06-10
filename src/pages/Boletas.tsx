@@ -70,12 +70,12 @@ export function Boletas() {
   const [isEditProductModalOpen, setIsEditProductModalOpen] = useState(false);
 
   // Form State - Register Boleta
+  const [editingBoletaId, setEditingBoletaId] = useState<string | null>(null);
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
   const [supplier, setSupplier] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'debito' | 'credito' | 'transferencia' | 'otro'>('efectivo');
   const [amountPaid, setAmountPaid] = useState<number>(0);
-  const [manualTotalAmount, setManualTotalAmount] = useState<number>(0);
   const [addedItems, setAddedItems] = useState<BoletaItem[]>([]);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -105,7 +105,7 @@ export function Boletas() {
     return addedItems.reduce((acc, item) => acc + item.total, 0);
   };
 
-  const totalAmount = addedItems.length > 0 ? getBoletaTotal() : manualTotalAmount;
+  const totalAmount = getBoletaTotal();
 
   useEffect(() => {
     fetchProducts();
@@ -307,16 +307,91 @@ export function Boletas() {
   };
 
   const handleOpenRegisterModal = () => {
+    setEditingBoletaId(null);
     setInvoiceNumber('');
     setPurchaseDate(new Date().toISOString().split('T')[0]);
     setSupplier('');
     setPaymentMethod('efectivo');
     setAmountPaid(0);
-    setManualTotalAmount(0);
     setAddedItems([]);
     setProductSearch('');
     setFormErrors({});
     setIsRegisterModalOpen(true);
+  };
+
+  const handleOpenEditModal = (boleta: Boleta) => {
+    setEditingBoletaId(boleta.id);
+    setInvoiceNumber(boleta.invoice_number);
+    setPurchaseDate(boleta.purchase_date);
+    setSupplier(boleta.supplier);
+    setPaymentMethod(boleta.payment_method);
+    setAmountPaid(boleta.amount_paid);
+    setAddedItems(boleta.items);
+    setProductSearch('');
+    setFormErrors({});
+    setIsRegisterModalOpen(true);
+  };
+
+  const handleDeleteBoleta = async (boleta: Boleta) => {
+    if (!window.confirm(`¿Está seguro de que desea eliminar la factura/boleta N° ${boleta.invoice_number}? Se revertirá el stock de los productos ingresados en ella.`)) {
+      return;
+    }
+
+    try {
+      const userId = JSON.parse(localStorage.getItem('pos_session') || '{}').id;
+      
+      for (const item of boleta.items) {
+        // Fetch current product stock
+        const { data: prodData } = await supabase
+          .from('products')
+          .select('stock')
+          .eq('id', item.id)
+          .single();
+        
+        const currentStock = prodData ? prodData.stock : 0;
+        const newStock = Math.max(0, currentStock - item.quantity);
+
+        // Update stock
+        const { error: updateError } = await supabase
+          .from('products')
+          .update({ stock: newStock })
+          .eq('id', item.id);
+
+        if (updateError) {
+          console.error(`Error al revertir stock del producto ${item.name}:`, updateError);
+        }
+
+        // Create inventory movement record for reversion (type: 'salida')
+        const { error: movementError } = await supabase
+          .from('inventory_movements')
+          .insert([{
+            product_id: item.id,
+            user_id: userId || null,
+            type: 'salida',
+            quantity: item.quantity,
+            reason: `Reversión por eliminación de Factura/Boleta N° ${boleta.invoice_number}`
+          }]);
+
+        if (movementError) {
+          console.error(`Error al registrar movimiento de reversión del producto ${item.name}:`, movementError);
+        }
+      }
+
+      // Delete boleta (cascades to boleta_items in DB)
+      const { error } = await supabase
+        .from('boletas')
+        .delete()
+        .eq('id', boleta.id);
+
+      if (error) throw error;
+
+      alert('Factura/Boleta eliminada correctamente.');
+      loadBoletas();
+      fetchProducts();
+    } catch (err: any) {
+      console.error(err);
+      alert('Error al eliminar factura/boleta: ' + err.message);
+    }
   };
 
   const handleSelectProduct = (product: any) => {
@@ -499,8 +574,8 @@ export function Boletas() {
     if (!purchaseDate) errors.purchaseDate = 'La fecha de compra es obligatoria';
     if (!supplier.trim()) errors.supplier = 'El proveedor es obligatorio';
     
-    if (addedItems.length === 0 && manualTotalAmount <= 0) {
-      errors.manualTotalAmount = 'Debe ingresar un monto total para la boleta';
+    if (addedItems.length === 0) {
+      errors.items = 'Falta agregar producto';
     }
 
     const negativeCheck = addedItems.some(item => item.quantity <= 0 || item.net_price < 0 || item.gross_price < 0 || item.sale_price < 0);
@@ -521,28 +596,73 @@ export function Boletas() {
 
     setIsSaving(true);
     try {
-      // 1. Insert header into boletas table in Supabase
-      const { data: boletaData, error: boletaError } = await supabase
-        .from('boletas')
-        .insert([{
-          invoice_number: invoiceNumber.trim(),
-          purchase_date: purchaseDate,
-          supplier: supplier.trim(),
-          payment_method: paymentMethod,
-          amount_paid: amountPaid,
-          total_amount: totalAmount
-        }])
-        .select()
-        .single();
+      const userId = JSON.parse(localStorage.getItem('pos_session') || '{}').id;
 
-      if (boletaError || !boletaData) {
-        throw new Error('Error al guardar cabecera de boleta: ' + boletaError?.message);
-      }
+      if (editingBoletaId) {
+        // --- MODO EDICIÓN ---
+        // 1. Obtener ítems originales de la base de datos
+        const { data: originalItems, error: fetchError } = await supabase
+          .from('boleta_items')
+          .select('*')
+          .eq('boleta_id', editingBoletaId);
 
-      // 2. Insert items into boleta_items table in Supabase
-      if (addedItems.length > 0) {
+        if (fetchError) throw new Error('Error al obtener ítems originales: ' + fetchError.message);
+
+        // 2. Revertir el stock correspondiente a dichos ítems originales
+        if (originalItems && originalItems.length > 0) {
+          for (const orig of originalItems) {
+            const { data: prodData } = await supabase
+              .from('products')
+              .select('stock')
+              .eq('id', orig.product_id)
+              .single();
+
+            const currentStock = prodData ? prodData.stock : 0;
+            const revertedStock = Math.max(0, currentStock - Number(orig.quantity));
+
+            // Actualizar stock del producto
+            await supabase
+              .from('products')
+              .update({ stock: revertedStock })
+              .eq('id', orig.product_id);
+
+            // Registrar movimiento de salida de reversión
+            await supabase.from('inventory_movements').insert([{
+              product_id: orig.product_id,
+              user_id: userId || null,
+              type: 'salida',
+              quantity: Number(orig.quantity),
+              reason: `Reversión por edición de Factura/Boleta N° ${invoiceNumber.trim()}`
+            }]);
+          }
+        }
+
+        // 3. Eliminar ítems antiguos
+        const { error: deleteError } = await supabase
+          .from('boleta_items')
+          .delete()
+          .eq('boleta_id', editingBoletaId);
+
+        if (deleteError) throw new Error('Error al limpiar ítems antiguos: ' + deleteError.message);
+
+        // 4. Actualizar cabecera de la boleta
+        const { error: updateBoletaError } = await supabase
+          .from('boletas')
+          .update({
+            invoice_number: invoiceNumber.trim(),
+            purchase_date: purchaseDate,
+            supplier: supplier.trim(),
+            payment_method: paymentMethod,
+            amount_paid: amountPaid,
+            total_amount: totalAmount
+          })
+          .eq('id', editingBoletaId);
+
+        if (updateBoletaError) throw new Error('Error al actualizar cabecera: ' + updateBoletaError.message);
+
+        // 5. Insertar los nuevos ítems e incrementar stock
         const itemsToInsert = addedItems.map(item => ({
-          boleta_id: boletaData.id,
+          boleta_id: editingBoletaId,
           product_id: item.id,
           quantity: item.quantity,
           net_price: item.net_price,
@@ -555,15 +675,10 @@ export function Boletas() {
           .from('boleta_items')
           .insert(itemsToInsert);
 
-        if (itemsError) {
-          throw new Error('Error al guardar items de boleta: ' + itemsError.message);
-        }
+        if (itemsError) throw new Error('Error al guardar nuevos ítems: ' + itemsError.message);
 
-        // 3. Update stock and cost prices in products table
-        const userId = JSON.parse(localStorage.getItem('pos_session') || '{}').id;
-        
+        // Incrementar el stock y precios correspondientes
         for (const item of addedItems) {
-          // Fetch current stock from Supabase to prevent overwrite race conditions
           const { data: prodData } = await supabase
             .from('products')
             .select('stock')
@@ -571,10 +686,9 @@ export function Boletas() {
             .single();
 
           const currentStock = prodData ? prodData.stock : 0;
-          const newStock = Math.max(0, currentStock + item.quantity);
+          const newStock = currentStock + item.quantity;
 
-          // Update stock and cost price
-          const { error: updateError } = await supabase
+          await supabase
             .from('products')
             .update({
               stock: newStock,
@@ -583,32 +697,110 @@ export function Boletas() {
             })
             .eq('id', item.id);
 
-          if (updateError) {
-            console.error(`Error al actualizar stock/precio del producto ${item.name}:`, updateError);
+          // Registrar movimiento de entrada de ajuste
+          await supabase.from('inventory_movements').insert([{
+            product_id: item.id,
+            user_id: userId || null,
+            type: 'entrada',
+            quantity: item.quantity,
+            reason: `Ajuste por edición de Factura/Boleta N° ${invoiceNumber.trim()}`
+          }]);
+        }
+
+        alert('Factura/Boleta actualizada con éxito y stock recalculado.');
+        setIsRegisterModalOpen(false);
+        setEditingBoletaId(null);
+        loadBoletas();
+        fetchProducts();
+
+      } else {
+        // --- MODO CREACIÓN ---
+        // 1. Insert header into boletas table in Supabase
+        const { data: boletaData, error: boletaError } = await supabase
+          .from('boletas')
+          .insert([{
+            invoice_number: invoiceNumber.trim(),
+            purchase_date: purchaseDate,
+            supplier: supplier.trim(),
+            payment_method: paymentMethod,
+            amount_paid: amountPaid,
+            total_amount: totalAmount
+          }])
+          .select()
+          .single();
+
+        if (boletaError || !boletaData) {
+          throw new Error('Error al guardar cabecera de boleta: ' + boletaError?.message);
+        }
+
+        // 2. Insert items into boleta_items table in Supabase
+        if (addedItems.length > 0) {
+          const itemsToInsert = addedItems.map(item => ({
+            boleta_id: boletaData.id,
+            product_id: item.id,
+            quantity: item.quantity,
+            net_price: item.net_price,
+            gross_price: item.gross_price,
+            sale_price: item.sale_price,
+            total: item.total
+          }));
+
+          const { error: itemsError } = await supabase
+            .from('boleta_items')
+            .insert(itemsToInsert);
+
+          if (itemsError) {
+            throw new Error('Error al guardar items de boleta: ' + itemsError.message);
           }
 
-          // 4. Create inventory movement record for audit trail
-          const { error: movementError } = await supabase
-            .from('inventory_movements')
-            .insert([{
-              product_id: item.id,
-              user_id: userId || null,
-              type: 'entrada',
-              quantity: item.quantity,
-              reason: `Compra Boleta N° ${invoiceNumber.trim()}`
-            }]);
+          // 3. Update stock and cost prices in products table
+          for (const item of addedItems) {
+            // Fetch current stock from Supabase
+            const { data: prodData } = await supabase
+              .from('products')
+              .select('stock')
+              .eq('id', item.id)
+              .single();
 
-          if (movementError) {
-            console.error(`Error al registrar movimiento del producto ${item.name}:`, movementError);
+            const currentStock = prodData ? prodData.stock : 0;
+            const newStock = Math.max(0, currentStock + item.quantity);
+
+            // Update stock and cost price
+            const { error: updateError } = await supabase
+              .from('products')
+              .update({
+                stock: newStock,
+                cost_price: item.gross_price,
+                sale_price: item.sale_price
+              })
+              .eq('id', item.id);
+
+            if (updateError) {
+              console.error(`Error al actualizar stock/precio del producto ${item.name}:`, updateError);
+            }
+
+            // 4. Create inventory movement record for audit trail
+            const { error: movementError } = await supabase
+              .from('inventory_movements')
+              .insert([{
+                product_id: item.id,
+                user_id: userId || null,
+                type: 'entrada',
+                quantity: item.quantity,
+                reason: `Compra Boleta N° ${invoiceNumber.trim()}`
+              }]);
+
+            if (movementError) {
+              console.error(`Error al registrar movimiento del producto ${item.name}:`, movementError);
+            }
           }
         }
-      }
 
-      alert('Boleta registrada con éxito en Supabase y stock actualizado.');
-      setIsRegisterModalOpen(false);
-      setManualTotalAmount(0);
-      loadBoletas();
-      fetchProducts();
+        alert('Boleta registrada con éxito en Supabase y stock actualizado.');
+        setIsRegisterModalOpen(false);
+        loadBoletas();
+        fetchProducts();
+      }
     } catch (err: any) {
       console.error(err);
       alert(err.message || 'Error inesperado al guardar la boleta');
@@ -691,9 +883,17 @@ export function Boletas() {
                       <TableCell className="text-right font-medium">{formatCLP(boleta.amount_paid)}</TableCell>
                       <TableCell className="text-right font-bold text-primary">{formatCLP(boleta.total_amount)}</TableCell>
                       <TableCell className="text-center">
-                        <Button variant="ghost" size="sm" className="text-primary" onClick={() => handleOpenDetailModal(boleta)}>
-                          <Eye size={16} style={{ marginRight: '4px' }} /> Ver Detalles
-                        </Button>
+                        <div className="flex justify-center gap-2">
+                          <Button variant="ghost" size="sm" className="text-primary" onClick={() => handleOpenDetailModal(boleta)} title="Ver detalles">
+                            <Eye size={16} />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="text-info" onClick={() => handleOpenEditModal(boleta)} title="Editar">
+                            <Edit2 size={16} />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="text-danger" onClick={() => handleDeleteBoleta(boleta)} title="Eliminar">
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -705,7 +905,15 @@ export function Boletas() {
       </Card>
 
       {/* Modal - Registrar Boleta */}
-      <Modal isOpen={isRegisterModalOpen} onClose={() => setIsRegisterModalOpen(false)} title="Registrar Factura/Boleta de Compra" width="lg">
+      <Modal 
+        isOpen={isRegisterModalOpen} 
+        onClose={() => {
+          setIsRegisterModalOpen(false);
+          setEditingBoletaId(null);
+        }} 
+        title={editingBoletaId ? "Editar Factura/Boleta de Compra" : "Registrar Factura/Boleta de Compra"} 
+        width="lg"
+      >
         <form onSubmit={handleSaveBoleta} className="flex-col gap-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4" style={{ marginBottom: 'var(--space-2)' }}>
             <Input 
@@ -735,7 +943,7 @@ export function Boletas() {
             />
           </div>
 
-          <div className={`grid grid-cols-1 ${addedItems.length === 0 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`} style={{ marginBottom: 'var(--space-4)' }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ marginBottom: 'var(--space-4)' }}>
             <div className="input-group w-full">
               <label className="input-label">Forma de Pago</label>
               <select 
@@ -758,15 +966,6 @@ export function Boletas() {
               onChange={val => setAmountPaid(val)} 
               fullWidth 
             />
-            {addedItems.length === 0 && (
-              <CurrencyInput 
-                label="Monto Total Factura/Boleta" 
-                required 
-                value={manualTotalAmount} 
-                onChange={val => setManualTotalAmount(val)} 
-                fullWidth 
-              />
-            )}
           </div>
 
           {/* Autocomplete Product Selection Row */}
@@ -940,7 +1139,14 @@ export function Boletas() {
           </div>
 
           <div className="flex justify-end gap-2 mt-4" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-4)' }}>
-            <Button variant="outline" type="button" onClick={() => setIsRegisterModalOpen(false)}>
+            <Button 
+              variant="outline" 
+              type="button" 
+              onClick={() => {
+                setIsRegisterModalOpen(false);
+                setEditingBoletaId(null);
+              }}
+            >
               Cancelar
             </Button>
             <Button variant="primary" type="submit" disabled={isSaving}>

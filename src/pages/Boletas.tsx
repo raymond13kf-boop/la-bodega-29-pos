@@ -123,7 +123,7 @@ export function Boletas() {
               invoice_number: boleta.invoice_number,
               purchase_date: boleta.purchase_date,
               supplier: boleta.supplier,
-              payment_method: boleta.payment_method,
+              payment_method: boleta.payment_method === 'otro' ? 'transferencia' : boleta.payment_method,
               amount_paid: boleta.amount_paid,
               total_amount: boleta.total_amount
             }])

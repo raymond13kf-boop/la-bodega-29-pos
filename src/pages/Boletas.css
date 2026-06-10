@@ -114,6 +114,11 @@
   color: rgb(139, 92, 246);
 }
 
+.badge-payment.transferencia {
+  background-color: rgba(13, 148, 136, 0.1);
+  color: #0d9488;
+}
+
 .badge-payment.otro {
   background-color: rgba(107, 114, 128, 0.1);
   color: #71717a;

@@ -26,7 +26,7 @@ interface Boleta {
   invoice_number: string;
   purchase_date: string;
   supplier: string;
-  payment_method: 'efectivo' | 'debito' | 'credito' | 'otro';
+  payment_method: 'efectivo' | 'debito' | 'credito' | 'transferencia' | 'otro';
   amount_paid: number;
   total_amount: number;
   items: BoletaItem[];
@@ -61,7 +61,7 @@ export function Boletas() {
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
   const [supplier, setSupplier] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'debito' | 'credito' | 'otro'>('efectivo');
+  const [paymentMethod, setPaymentMethod] = useState<'efectivo' | 'debito' | 'credito' | 'transferencia' | 'otro'>('efectivo');
   const [amountPaid, setAmountPaid] = useState<number>(0);
   const [manualTotalAmount, setManualTotalAmount] = useState<number>(0);
   const [addedItems, setAddedItems] = useState<BoletaItem[]>([]);
@@ -672,7 +672,8 @@ export function Boletas() {
                         <span className={`badge-payment ${boleta.payment_method}`}>
                           {boleta.payment_method === 'debito' ? 'Débito' : 
                            boleta.payment_method === 'credito' ? 'Crédito' : 
-                           boleta.payment_method === 'efectivo' ? 'Efectivo' : 'Otro'}
+                           boleta.payment_method === 'efectivo' ? 'Efectivo' : 
+                           boleta.payment_method === 'transferencia' ? 'Transferencia' : 'Otro'}
                         </span>
                       </TableCell>
                       <TableCell className="text-right font-medium">{formatCLP(boleta.amount_paid)}</TableCell>
@@ -734,6 +735,7 @@ export function Boletas() {
                 <option value="efectivo">Efectivo</option>
                 <option value="debito">Tarjeta de Débito</option>
                 <option value="credito">Tarjeta de Crédito</option>
+                <option value="transferencia">Transferencia</option>
                 <option value="otro">Otro</option>
               </select>
             </div>
@@ -960,7 +962,8 @@ export function Boletas() {
                 <span className="boleta-detail-value capitalize">
                   {selectedBoleta.payment_method === 'debito' ? 'Tarjeta Débito' : 
                    selectedBoleta.payment_method === 'credito' ? 'Tarjeta Crédito' : 
-                   selectedBoleta.payment_method === 'efectivo' ? 'Efectivo' : 'Otro'}
+                   selectedBoleta.payment_method === 'efectivo' ? 'Efectivo' : 
+                   selectedBoleta.payment_method === 'transferencia' ? 'Transferencia' : 'Otro'}
                 </span>
               </div>
               <div className="boleta-detail-item">

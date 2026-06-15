@@ -15,9 +15,9 @@ interface BoletaItem {
   sku?: string;
   barcode?: string;
   quantity: number | '';
-  net_price: number;
-  gross_price: number;
-  sale_price: number;
+  net_price: number | '';
+  gross_price: number | '';
+  sale_price: number | '';
   total: number;
 }
 
@@ -159,8 +159,8 @@ export function Boletas() {
                       name: item.name,
                       sku: item.sku || `B29-${Math.floor(1000 + Math.random() * 9000)}`,
                       barcode: item.barcode || `780${Date.now().toString().slice(-9)}`,
-                      cost_price: item.gross_price,
-                      sale_price: item.sale_price || Math.round(item.gross_price * 1.3),
+                      cost_price: Number(item.gross_price),
+                      sale_price: item.sale_price === '' ? Math.round(Number(item.gross_price) * 1.3) : Number(item.sale_price),
                       stock: 0,
                       min_stock: 5,
                       active: true
@@ -399,9 +399,9 @@ export function Boletas() {
       sku: product.sku,
       barcode: product.barcode,
       quantity: '',
-      net_price: Math.round((product.cost_price || 0) / 1.19),
-      gross_price: product.cost_price || 0,
-      sale_price: product.sale_price || 0,
+      net_price: '',
+      gross_price: '',
+      sale_price: '',
       total: 0
     };
 
@@ -419,12 +419,13 @@ export function Boletas() {
         if (item.id === productId) {
           const updatedItem = { ...item, [field]: value };
           if (field === 'net_price') {
-            updatedItem.gross_price = Math.round(Number(value) * 1.19);
+            updatedItem.gross_price = value === '' ? '' : Math.round(Number(value) * 1.19);
           } else if (field === 'gross_price') {
-            updatedItem.net_price = Math.round(Number(value) / 1.19);
+            updatedItem.net_price = value === '' ? '' : Math.round(Number(value) / 1.19);
           }
           const qty = updatedItem.quantity === '' ? 0 : Number(updatedItem.quantity);
-          updatedItem.total = qty * updatedItem.gross_price;
+          const gross = updatedItem.gross_price === '' ? 0 : Number(updatedItem.gross_price);
+          updatedItem.total = qty * gross;
           return updatedItem;
         }
         return item;
@@ -468,7 +469,7 @@ export function Boletas() {
       sku: item.sku || '',
       barcode: item.barcode || '',
       cost_price: product?.cost_price || 0,
-      sale_price: item.sale_price,
+      sale_price: Number(item.sale_price),
       min_stock: product?.min_stock || 5
     });
     setProductFormMode('edit');
@@ -563,9 +564,9 @@ export function Boletas() {
               sku: updatedProduct.sku,
               barcode: updatedProduct.barcode,
               quantity: '',
-              net_price: Math.round((updatedProduct.cost_price || 0) / 1.19),
-              gross_price: updatedProduct.cost_price || 0,
-              sale_price: updatedProduct.sale_price || 0,
+              net_price: '',
+              gross_price: '',
+              sale_price: '',
               total: 0
             };
             return [...prev, newItem];
@@ -598,12 +599,12 @@ export function Boletas() {
     const invalidQtyOrPrice = addedItems.some(item => 
       item.quantity === '' || 
       Number(item.quantity) <= 0 || 
-      item.net_price < 0 || 
-      item.gross_price < 0 || 
-      item.sale_price < 0
+      item.net_price === '' || Number(item.net_price) < 0 || 
+      item.gross_price === '' || Number(item.gross_price) < 0 || 
+      item.sale_price === '' || Number(item.sale_price) < 0
     );
     if (invalidQtyOrPrice) {
-      errors.items = 'Las cantidades deben ser mayores a 0 y los precios no pueden ser menores a 0';
+      errors.items = 'Las cantidades deben ser mayores a 0, y los precios no pueden quedar en blanco ni ser menores a 0';
     }
 
     if (amountPaid < 0) {
@@ -688,9 +689,9 @@ export function Boletas() {
           boleta_id: editingBoletaId,
           product_id: item.id,
           quantity: Number(item.quantity),
-          net_price: item.net_price,
-          gross_price: item.gross_price,
-          sale_price: item.sale_price,
+          net_price: Number(item.net_price),
+          gross_price: Number(item.gross_price),
+          sale_price: Number(item.sale_price),
           total: item.total
         }));
 
@@ -762,9 +763,9 @@ export function Boletas() {
             boleta_id: boletaData.id,
             product_id: item.id,
             quantity: Number(item.quantity),
-            net_price: item.net_price,
-            gross_price: item.gross_price,
-            sale_price: item.sale_price,
+            net_price: Number(item.net_price),
+            gross_price: Number(item.gross_price),
+            sale_price: Number(item.sale_price),
             total: item.total
           }));
 
@@ -793,8 +794,8 @@ export function Boletas() {
               .from('products')
               .update({
                 stock: newStock,
-                cost_price: item.gross_price,
-                sale_price: item.sale_price
+                cost_price: Number(item.gross_price),
+                sale_price: Number(item.sale_price)
               })
               .eq('id', item.id);
 
@@ -1113,9 +1114,9 @@ export function Boletas() {
                           style={{ padding: '4px', margin: 0, width: '100%' }}
                           min="0"
                           required
-                          value={item.net_price}
+                          value={item.net_price === '' ? '' : item.net_price}
                           onWheel={e => e.currentTarget.blur()}
-                          onChange={e => handleUpdateItemField(item.id, 'net_price', e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)))}
+                          onChange={e => handleUpdateItemField(item.id, 'net_price', e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
                         />
                       </TableCell>
                       <TableCell>
@@ -1125,9 +1126,9 @@ export function Boletas() {
                           style={{ padding: '4px', margin: 0, width: '100%' }}
                           min="0"
                           required
-                          value={item.gross_price}
+                          value={item.gross_price === '' ? '' : item.gross_price}
                           onWheel={e => e.currentTarget.blur()}
-                          onChange={e => handleUpdateItemField(item.id, 'gross_price', e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)))}
+                          onChange={e => handleUpdateItemField(item.id, 'gross_price', e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
                         />
                       </TableCell>
                       <TableCell>
@@ -1137,9 +1138,9 @@ export function Boletas() {
                           style={{ padding: '4px', margin: 0, width: '100%' }}
                           min="0"
                           required
-                          value={item.sale_price}
+                          value={item.sale_price === '' ? '' : item.sale_price}
                           onWheel={e => e.currentTarget.blur()}
-                          onChange={e => handleUpdateItemField(item.id, 'sale_price', e.target.value === '' ? 0 : Math.max(0, Number(e.target.value)))}
+                          onChange={e => handleUpdateItemField(item.id, 'sale_price', e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))}
                         />
                       </TableCell>
                       <TableCell className="text-right font-bold text-sm text-gray-800">
@@ -1259,9 +1260,9 @@ export function Boletas() {
                             {item.barcode && <div className="text-xs text-muted">Código: {item.barcode}</div>}
                           </TableCell>
                           <TableCell className="text-center font-medium">{item.quantity}</TableCell>
-                          <TableCell className="text-right">{formatCLP(item.net_price)}</TableCell>
-                          <TableCell className="text-right font-medium">{formatCLP(item.gross_price)}</TableCell>
-                          <TableCell className="text-right font-medium text-primary">{formatCLP(item.sale_price)}</TableCell>
+                          <TableCell className="text-right">{formatCLP(Number(item.net_price))}</TableCell>
+                          <TableCell className="text-right font-medium">{formatCLP(Number(item.gross_price))}</TableCell>
+                          <TableCell className="text-right font-medium text-primary">{formatCLP(Number(item.sale_price))}</TableCell>
                           <TableCell className="text-right font-bold text-primary">{formatCLP(item.total)}</TableCell>
                         </TableRow>
                       ))

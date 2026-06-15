@@ -531,32 +531,51 @@ export function Boletas() {
           min_stock: productFormData.min_stock
         };
 
-        const { error } = await supabase
+        const { data: updatedProduct, error } = await supabase
           .from('products')
           .update(payload)
-          .eq('id', productFormData.id);
+          .eq('id', productFormData.id)
+          .select()
+          .single();
 
         if (error) throw error;
 
-        // Update in local addedItems list too
-        setAddedItems(prev =>
-          prev.map(item => {
-            if (item.id === productFormData.id) {
-              return {
-                ...item,
-                name: productFormData.name.trim(),
-                sku: productFormData.sku.trim(),
-                barcode: productFormData.barcode.trim(),
-                sale_price: productFormData.sale_price
-              };
-            }
-            return item;
-          })
-        );
+        // Update in local addedItems list too, or add if it doesn't exist
+        setAddedItems(prev => {
+          const exists = prev.find(item => item.id === productFormData.id);
+          if (exists) {
+            return prev.map(item => {
+              if (item.id === productFormData.id) {
+                return {
+                  ...item,
+                  name: productFormData.name.trim(),
+                  sku: productFormData.sku.trim(),
+                  barcode: productFormData.barcode.trim(),
+                  sale_price: productFormData.sale_price
+                };
+              }
+              return item;
+            });
+          } else if (updatedProduct) {
+            const newItem: BoletaItem = {
+              id: updatedProduct.id,
+              name: updatedProduct.name,
+              sku: updatedProduct.sku,
+              barcode: updatedProduct.barcode,
+              quantity: '',
+              net_price: Math.round((updatedProduct.cost_price || 0) / 1.19),
+              gross_price: updatedProduct.cost_price || 0,
+              sale_price: updatedProduct.sale_price || 0,
+              total: 0
+            };
+            return [...prev, newItem];
+          }
+          return prev;
+        });
 
         await fetchProducts(); // Sync catalog cache
         setIsProductModalOpen(false);
-        alert('Producto actualizado en la base de datos.');
+        alert('Producto actualizado en la base de datos y agregado a la boleta.');
       }
     } catch (err: any) {
       console.error(err);

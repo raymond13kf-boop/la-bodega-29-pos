@@ -157,5 +157,40 @@
   .grid-cols-3, .grid-cols-2 {
     grid-template-columns: 1fr !important;
   }
+
+  .product-selector-actions {
+    flex-direction: column;
+    width: 100%;
+    gap: var(--space-2);
+  }
+
+  .product-selector-actions button {
+    width: 100% !important;
+    margin-top: 0 !important;
+  }
+}
+
+.product-selector-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-end;
+}
+
+.select-product-item {
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background-color 0.2s;
+}
+
+.select-product-item:hover {
+  background-color: var(--color-background);
+}
+
+.select-product-item:last-child {
+  border-bottom: none;
 }
 

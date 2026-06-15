@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Card, CardContent, CardHeader } from '../components/ui/Card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/Table';
@@ -44,21 +44,7 @@ export function Boletas() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Autocomplete Search State
-  const [productSearch, setProductSearch] = useState('');
-  const [showDropdown, setShowDropdown] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdown on click outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  // Autocomplete Search State (removed direct inline search, left update search)
 
   // Modal State
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -306,7 +292,6 @@ export function Boletas() {
     setPaymentMethod('efectivo');
     setAmountPaid(0);
     setAddedItems([]);
-    setProductSearch('');
     setFormErrors({});
     setIsRegisterModalOpen(true);
   };
@@ -319,7 +304,6 @@ export function Boletas() {
     setPaymentMethod(boleta.payment_method);
     setAmountPaid(boleta.amount_paid);
     setAddedItems(boleta.items);
-    setProductSearch('');
     setFormErrors({});
     setIsRegisterModalOpen(true);
   };
@@ -838,12 +822,6 @@ export function Boletas() {
     b.invoice_number.includes(searchTerm)
   );
 
-  const filteredSearchProducts = products.filter(p =>
-    p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-    (p.barcode && p.barcode.includes(productSearch)) ||
-    (p.sku && p.sku.toLowerCase().includes(productSearch.toLowerCase()))
-  );
-
   const filteredUpdateProducts = products.filter(p =>
     p.name.toLowerCase().includes(updateProductSearch.toLowerCase()) ||
     (p.barcode && p.barcode.includes(updateProductSearch)) ||
@@ -1001,66 +979,14 @@ export function Boletas() {
           {/* Autocomplete Product Selection Row */}
           <div className="product-selector-wrapper">
             <h3 className="font-semibold mb-2 flex items-center gap-1 text-sm text-primary">
-              <PlusCircle size={16} /> Buscar o Crear Producto en esta Factura/Boleta
+              <PlusCircle size={16} /> Crear Producto o Agregar un Producto Existente en esta Factura/Boleta
             </h3>
             <div className="product-selector-row">
-              <div className="relative flex-grow min-w-[200px] search-container" ref={dropdownRef} style={{ flex: 2 }}>
-                <label className="input-label text-xs">Escribe para Buscar Producto</label>
-                <div className="relative">
-                  <Input
-                    placeholder="Buscar por nombre, código o SKU..."
-                    value={productSearch}
-                    onChange={e => {
-                      setProductSearch(e.target.value);
-                      setShowDropdown(true);
-                    }}
-                    onFocus={() => setShowDropdown(true)}
-                  />
-                  {showDropdown && productSearch.trim() !== '' && (
-                    <div className="autocomplete-dropdown">
-                      {filteredSearchProducts.slice(0, 8).map(p => (
-                        <div
-                          key={p.id}
-                          className="autocomplete-item"
-                          onClick={() => {
-                            handleSelectProduct(p);
-                            setProductSearch('');
-                            setShowDropdown(false);
-                          }}
-                        >
-                          <div>
-                            <span className="font-semibold text-gray-800">{p.name}</span>
-                            <div className="text-xs text-gray-500">
-                              Código: {p.barcode || 'N/A'} {p.sku ? `| SKU: ${p.sku}` : ''}
-                            </div>
-                          </div>
-                          <span className="font-bold text-primary">{formatCLP(p.sale_price)}</span>
-                        </div>
-                      ))}
-                      {filteredSearchProducts.length === 0 && (
-                        <div className="px-4 py-3 text-gray-500 text-sm text-center">
-                          No se encontraron productos. 
-                          <button
-                            type="button"
-                            className="text-primary font-bold underline ml-1 hover:text-primary-dark"
-                            onClick={() => {
-                              handleOpenNewProductModal();
-                              setShowDropdown(false);
-                            }}
-                          >
-                            Crear nuevo producto
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="product-selector-actions">
-                <Button type="button" variant="outline" onClick={handleOpenNewProductModal}>
+              <div className="product-selector-actions" style={{ flex: 1, justifyContent: 'flex-start' }}>
+                <Button type="button" variant="primary" onClick={handleOpenNewProductModal}>
                   <Plus size={16} style={{ marginRight: '4px' }} /> Agregar Producto
                 </Button>
-                <Button type="button" variant="outline" onClick={handleOpenSelectProductToUpdate}>
+                <Button type="button" variant="primary" onClick={handleOpenSelectProductToUpdate}>
                   <Edit2 size={16} style={{ marginRight: '4px' }} /> Actualizar Producto
                 </Button>
               </div>

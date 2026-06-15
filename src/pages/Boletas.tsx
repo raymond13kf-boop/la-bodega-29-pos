@@ -386,7 +386,7 @@ export function Boletas() {
     }
   };
 
-  const handleSelectProduct = (product: any) => {
+  const handleSelectProduct = (product: any, preloadPrices: boolean = true) => {
     const alreadyExists = addedItems.find(item => item.id === product.id);
     if (alreadyExists) {
       alert('Este producto ya ha sido agregado a la boleta. Edite su cantidad en la tabla.');
@@ -399,9 +399,9 @@ export function Boletas() {
       sku: product.sku,
       barcode: product.barcode,
       quantity: '',
-      net_price: '',
-      gross_price: '',
-      sale_price: '',
+      net_price: preloadPrices ? Math.round((product.cost_price || 0) / 1.19) : '',
+      gross_price: preloadPrices ? (product.cost_price || 0) : '',
+      sale_price: preloadPrices ? (product.sale_price || 0) : '',
       total: 0
     };
 
@@ -516,8 +516,8 @@ export function Boletas() {
         if (data) {
           // Refresh local cache list
           await fetchProducts();
-          // Auto select newly created product
-          handleSelectProduct(data);
+          // Auto select newly created product, but do NOT preload prices for new products
+          handleSelectProduct(data, false);
           setIsProductModalOpen(false);
           alert('Producto creado en catálogo y agregado a la boleta.');
         }
@@ -564,9 +564,9 @@ export function Boletas() {
               sku: updatedProduct.sku,
               barcode: updatedProduct.barcode,
               quantity: '',
-              net_price: '',
-              gross_price: '',
-              sale_price: '',
+              net_price: Math.round((updatedProduct.cost_price || 0) / 1.19),
+              gross_price: updatedProduct.cost_price || 0,
+              sale_price: updatedProduct.sale_price || 0,
               total: 0
             };
             return [...prev, newItem];

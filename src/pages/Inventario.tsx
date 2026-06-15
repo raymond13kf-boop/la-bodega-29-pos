@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { CurrencyInput } from '../components/ui/CurrencyInput';
 import { Modal } from '../components/ui/Modal';
-import { Search, Download, Edit2 } from 'lucide-react';
+import { Search, Download, Edit2, Trash2 } from 'lucide-react';
 import { type Product } from '../store/posStore';
 import { useAuthStore } from '../store/authStore';
 import * as XLSX from 'xlsx';
@@ -151,6 +151,27 @@ export function Inventario() {
     }
   };
 
+  const handleDeleteProduct = async (product: Product) => {
+    if (!window.confirm(`¿Está seguro de que desea eliminar el producto "${product.name}" del inventario?`)) {
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ active: false })
+        .eq('id', product.id);
+
+      if (error) throw error;
+      
+      alert('Producto eliminado correctamente.');
+      fetchData();
+    } catch (err: any) {
+      console.error(err);
+      alert('Error al eliminar el producto: ' + err.message);
+    }
+  };
+
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -266,9 +287,16 @@ export function Inventario() {
                         </TableCell>
                         <TableCell className="text-info font-medium">{formatCLP(utilidad)}</TableCell>
                         <TableCell className="text-center">
-                          <Button variant="ghost" size="sm" className="text-primary" onClick={() => handleOpenEditModal(product)} title="Actualizar datos del producto">
-                            <Edit2 size={16} />
-                          </Button>
+                          <div className="flex justify-center gap-1">
+                            <Button variant="ghost" size="sm" className="text-primary" onClick={() => handleOpenEditModal(product)} title="Actualizar datos del producto">
+                              <Edit2 size={16} />
+                            </Button>
+                            {user?.role === 'admin' && (
+                              <Button variant="ghost" size="sm" className="text-danger" onClick={() => handleDeleteProduct(product)} title="Eliminar producto">
+                                <Trash2 size={16} />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );

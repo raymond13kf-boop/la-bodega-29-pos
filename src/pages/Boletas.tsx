@@ -984,10 +984,10 @@ export function Boletas() {
             <div className="product-selector-row">
               <div className="product-selector-actions" style={{ flex: 1, justifyContent: 'flex-start' }}>
                 <Button type="button" variant="primary" onClick={handleOpenNewProductModal}>
-                  <Plus size={16} style={{ marginRight: '4px' }} /> Agregar Producto
+                  <Plus size={16} style={{ marginRight: '4px' }} /> Registrar Nuevo Producto
                 </Button>
                 <Button type="button" variant="primary" onClick={handleOpenSelectProductToUpdate}>
-                  <Edit2 size={16} style={{ marginRight: '4px' }} /> Actualizar Producto
+                  <Edit2 size={16} style={{ marginRight: '4px' }} /> Actualizar Producto Existente
                 </Button>
               </div>
             </div>

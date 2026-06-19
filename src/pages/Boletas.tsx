@@ -41,6 +41,7 @@ export function Boletas() {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterDate, setFilterDate] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -249,6 +250,7 @@ export function Boletas() {
             )
           )
         `)
+        .order('purchase_date', { ascending: false })
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -817,10 +819,11 @@ export function Boletas() {
     }
   };
 
-  const filteredBoletas = boletas.filter(b => 
-    b.supplier.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    b.invoice_number.includes(searchTerm)
-  );
+  const filteredBoletas = boletas.filter(b => {
+    const matchesSearch = b.supplier.toLowerCase().includes(searchTerm.toLowerCase()) || b.invoice_number.includes(searchTerm);
+    const matchesDate = filterDate ? b.purchase_date.startsWith(filterDate) : true;
+    return matchesSearch && matchesDate;
+  });
 
   const filteredUpdateProducts = products.filter(p =>
     p.name.toLowerCase().includes(updateProductSearch.toLowerCase()) ||
@@ -845,14 +848,29 @@ export function Boletas() {
 
       <Card>
         <CardHeader>
-          <div className="w-full" style={{ maxWidth: '400px' }}>
-            <Input 
-              placeholder="Buscar por proveedor o número de factura/boleta..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              icon={<Search size={18} />}
-              fullWidth
-            />
+          <div className="flex gap-4 w-full" style={{ maxWidth: '600px' }}>
+            <div style={{ flex: 2 }}>
+              <Input 
+                placeholder="Buscar por proveedor o número..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                icon={<Search size={18} />}
+                fullWidth
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <Input
+                type="month"
+                value={filterDate}
+                onChange={(e) => setFilterDate(e.target.value)}
+                fullWidth
+              />
+            </div>
+            {filterDate && (
+              <Button variant="outline" onClick={() => setFilterDate('')}>
+                Limpiar
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>

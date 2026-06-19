@@ -57,11 +57,15 @@ export function Dashboard() {
       const endISO = end.toISOString();
 
       // 1. Ventas y Tickets del Periodo
-      const { data: salesData } = await supabase
+      const { data: salesData, error: salesError } = await supabase
         .from('sales')
         .select('id, total, created_at, status, payment_method, users(full_name)')
         .gte('created_at', startISO)
         .lte('created_at', endISO);
+
+      if (salesError) {
+        alert('Error cargando ventas (Dashboard): ' + salesError.message);
+      }
 
       let totalVentas = 0;
       let totalTickets = 0;

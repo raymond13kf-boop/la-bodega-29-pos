@@ -41,10 +41,14 @@ export function Reportes() {
     setIsLoading(true);
     
     // Fetch Sales
-    const { data: salesData } = await supabase
+    const { data: salesData, error: salesError } = await supabase
       .from('sales')
       .select('*, users(full_name), sale_items(quantity, price, products(name))')
       .order('created_at', { ascending: false });
+
+    if (salesError) {
+      alert('Error cargando ventas (Reportes): ' + salesError.message);
+    }
 
     // Fetch Products
     const { data: productsData } = await supabase

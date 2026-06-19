@@ -15,6 +15,7 @@ import { Caja } from './pages/Caja';
 import { Reportes } from './pages/Reportes';
 import { Usuarios } from './pages/Usuarios';
 import { Sistema } from './pages/Sistema';
+import { Proveedores } from './pages/Proveedores';
 import { Layout } from './components/layout/Layout';
 
 function ProtectedRoute({ children, requiredPermission }: { children: React.ReactNode, requiredPermission?: keyof UserPermissions }) {
@@ -152,6 +153,11 @@ function App() {
           <Route path="historial-precios" element={
             <ProtectedRoute requiredPermission="can_inventory">
               <HistorialPrecios />
+            </ProtectedRoute>
+          } />
+          <Route path="proveedores" element={
+            <ProtectedRoute requiredPermission="can_inventory">
+              <Proveedores />
             </ProtectedRoute>
           } />
           <Route path="caja" element={

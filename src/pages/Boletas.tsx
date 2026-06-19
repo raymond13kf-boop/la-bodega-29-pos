@@ -821,7 +821,7 @@ export function Boletas() {
 
   const filteredBoletas = boletas.filter(b => {
     const matchesSearch = b.supplier.toLowerCase().includes(searchTerm.toLowerCase()) || b.invoice_number.includes(searchTerm);
-    const matchesDate = filterDate ? b.purchase_date === filterDate : true;
+    const matchesDate = filterDate ? b.purchase_date.startsWith(filterDate) : true;
     return matchesSearch && matchesDate;
   });
 
@@ -860,7 +860,7 @@ export function Boletas() {
             </div>
             <div style={{ flex: 1 }}>
               <Input
-                type="date"
+                type="month"
                 value={filterDate}
                 onChange={(e) => setFilterDate(e.target.value)}
                 fullWidth
